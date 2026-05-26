@@ -1,27 +1,16 @@
-/*
-Copyright (C) 2023-2026 QuantumNous
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
-*/
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { Markdown } from '@/components/ui/markdown'
-import { PublicLayout } from '@/components/layout'
-import { Footer } from '@/components/layout/components/footer'
-import { CTA, Features, Hero, HowItWorks, Stats } from './components'
+import { LmTopbar } from '@/components/lm/topbar'
+import { LmFooter } from '@/components/lm/footer'
+import {
+  HeroSection,
+  CapabilityMatrix,
+  ModelsPreview,
+  QuickstartCode,
+  WhySection,
+  CtaSection,
+} from './components/lm-sections'
 import { useHomePageContent } from './hooks'
 
 export function Home() {
@@ -32,42 +21,47 @@ export function Home() {
 
   if (!isLoaded) {
     return (
-      <PublicLayout showMainContainer={false}>
-        <main className='flex min-h-screen items-center justify-center'>
-          <div className='text-muted-foreground'>{t('Loading...')}</div>
+      <div className="lm-shell">
+        <LmTopbar />
+        <main style={{ display: 'flex', minHeight: '80vh', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="lm-text-muted">{t('Loading...')}</div>
         </main>
-      </PublicLayout>
+      </div>
     )
   }
 
   if (content) {
     return (
-      <PublicLayout showMainContainer={false}>
-        <main className='overflow-x-hidden'>
+      <div className="lm-shell">
+        <LmTopbar />
+        <main style={{ overflow: 'hidden' }}>
           {isUrl ? (
             <iframe
               src={content}
-              className='h-screen w-full border-none'
+              className="h-screen w-full border-none"
               title={t('Custom Home Page')}
             />
           ) : (
-            <div className='container mx-auto py-8'>
-              <Markdown className='custom-home-content'>{content}</Markdown>
+            <div className="lm-container" style={{ padding: '32px' }}>
+              <Markdown className="custom-home-content">{content}</Markdown>
             </div>
           )}
         </main>
-      </PublicLayout>
+      </div>
     )
   }
 
   return (
-    <PublicLayout showMainContainer={false}>
-      <Hero isAuthenticated={isAuthenticated} />
-      <Stats />
-      <Features />
-      <HowItWorks />
-      <CTA isAuthenticated={isAuthenticated} />
-      <Footer />
-    </PublicLayout>
+    <div className="lm-shell">
+      <LmTopbar />
+      <HeroSection isAuthenticated={isAuthenticated} />
+      <div className="lm-hazard-stripe" aria-hidden="true" />
+      <CapabilityMatrix />
+      <ModelsPreview />
+      <QuickstartCode />
+      <WhySection />
+      <CtaSection isAuthenticated={isAuthenticated} />
+      <LmFooter />
+    </div>
   )
 }

@@ -16,19 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
+
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@import '@fontsource-variable/public-sans';
-/* Editorial serif (Lora) backing the `serif` font axis and the Anthropic
- * preset's default typography. See `--font-serif` in theme.css for the
- * full Latin + CJK fallback stack and `theme-presets.css` for the cascade
- * that activates it. Loaded globally so font-switching is instantaneous
- * with no FOUT once the variable is fetched. */
-@import '@fontsource-variable/lora';
 
 @import './theme.css';
 @import './theme-presets.css';
+@import './lofi-mecha.css';
 
 /* Shiki dual themes: token colors follow dark theme (pre background stays `bg-background` on the block) */
 @layer components {
@@ -48,13 +44,13 @@ For commercial licensing, please contact support@quantumnous.com
   }
   html {
     @apply overflow-x-hidden font-sans;
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   body {
-    @apply bg-background text-foreground has-[div[data-variant='inset']]:bg-sidebar min-h-svh w-full;
-    /* Font is driven by the theme's font axis via `--font-body`
-     * (defined in theme.css, swapped by `[data-theme-font='...']` blocks
-     * in theme-presets.css). Defaults to the project's humanist sans. */
-    font-family: var(--font-body);
+    @apply bg-background text-foreground has-[div[data-variant='inset']]:bg-sidebar min-h-svh w-full font-sans;
   }
 
   /* Keep sticky headers stable while primitives lock body scrolling. */
@@ -129,7 +125,7 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 @utility max-w-container {
-  max-width: 1280px;
+  max-width: 1320px;
 }
 
 @utility max-w-container-lg {
@@ -225,14 +221,14 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 
-/* Launch UI Animations and Effects - Matching Template Exactly */
+/* Launch UI Animations and Effects */
 @layer utilities {
   /* Gradient utilities */
   .bg-radial {
     background-image: radial-gradient(var(--tw-gradient-stops));
   }
 
-  /* Glass morphism effects - matching Launch UI template */
+  /* Glass morphism effects */
   .glass-1 {
     @apply border-border from-card/80 to-card/40 dark:border-border/10 dark:border-b-border/5 dark:border-t-border/20 dark:from-card/5 dark:to-card/0 border bg-linear-to-b;
   }
@@ -253,7 +249,7 @@ For commercial licensing, please contact support@quantumnous.com
     @apply border-border border-b-input from-card/100 to-card/20 dark:border-border/10 dark:border-t-border/30 dark:from-primary/15 dark:to-primary/5 border bg-linear-to-b dark:border-b-0;
   }
 
-  /* Fade effects - matching Launch UI template */
+  /* Fade effects */
   .fade-x {
     mask-image: linear-gradient(
       to right,
@@ -274,111 +270,42 @@ For commercial licensing, please contact support@quantumnous.com
     );
   }
 
-  .fade-top {
-    mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
-  }
-
-  .fade-bottom {
-    mask-image: linear-gradient(to top, transparent 0%, black 35%);
-  }
-
-  .fade-top-lg {
-    mask-image: linear-gradient(to bottom, transparent 15%, black 100%);
-  }
-
-  .fade-bottom-lg {
-    mask-image: linear-gradient(to top, transparent 15%, black 100%);
-  }
-
-  .fade-left {
-    mask-image: linear-gradient(to right, transparent 0%, black 35%);
-  }
-
-  .fade-right {
-    mask-image: linear-gradient(to left, transparent 0%, black 35%);
-  }
-
-  .fade-left-lg {
-    mask-image: linear-gradient(to right, transparent 15%, black 100%);
-  }
-
-  .fade-right-lg {
-    mask-image: linear-gradient(to left, transparent 15%, black 100%);
-  }
+  .fade-top { mask-image: linear-gradient(to bottom, transparent 0%, black 35%); }
+  .fade-bottom { mask-image: linear-gradient(to top, transparent 0%, black 35%); }
+  .fade-top-lg { mask-image: linear-gradient(to bottom, transparent 15%, black 100%); }
+  .fade-bottom-lg { mask-image: linear-gradient(to top, transparent 15%, black 100%); }
+  .fade-left { mask-image: linear-gradient(to right, transparent 0%, black 35%); }
+  .fade-right { mask-image: linear-gradient(to left, transparent 0%, black 35%); }
+  .fade-left-lg { mask-image: linear-gradient(to right, transparent 15%, black 100%); }
+  .fade-right-lg { mask-image: linear-gradient(to left, transparent 15%, black 100%); }
 
   /* Animations */
   .animate-appear {
     animation: appear 0.6s forwards ease-out;
   }
-
   .animate-appear-zoom {
     animation: appear-zoom 0.6s forwards ease-out;
   }
-
-  .animation-delay-100 {
-    animation-delay: 100ms;
-  }
-
-  .animation-delay-300 {
-    animation-delay: 300ms;
-  }
-
-  .animation-delay-700 {
-    animation-delay: 700ms;
-  }
-
-  .animation-delay-1000 {
-    animation-delay: 1000ms;
-  }
+  .animation-delay-100 { animation-delay: 100ms; }
+  .animation-delay-300 { animation-delay: 300ms; }
+  .animation-delay-700 { animation-delay: 700ms; }
+  .animation-delay-1000 { animation-delay: 1000ms; }
 
   @keyframes appear {
-    0% {
-      opacity: 0;
-      transform: translateY(1rem);
-      filter: blur(0.5rem);
-    }
-    50% {
-      filter: blur(0);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
-      filter: blur(0);
-    }
+    0% { opacity: 0; transform: translateY(1rem); filter: blur(0.5rem); }
+    50% { filter: blur(0); }
+    100% { opacity: 1; transform: translateY(0); filter: blur(0); }
   }
-
   @keyframes appear-zoom {
-    0% {
-      opacity: 0;
-      transform: scale(0.5);
-    }
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
+    0% { opacity: 0; transform: scale(0.5); }
+    100% { opacity: 1; transform: scale(1); }
   }
-
-  /* Vertical scroll animation for icon lists */
   @keyframes scroll-up {
-    0% {
-      transform: translateY(0);
-    }
-    100% {
-      transform: translateY(-50%);
-    }
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-50%); }
   }
-
-  .animate-scroll-up {
-    animation: scroll-up 20s linear infinite;
-    will-change: transform;
-  }
-
-  .animate-scroll-down {
-    animation: scroll-up 20s linear infinite reverse;
-    will-change: transform;
-  }
-
-  /* Pause animation on hover */
+  .animate-scroll-up { animation: scroll-up 20s linear infinite; will-change: transform; }
+  .animate-scroll-down { animation: scroll-up 20s linear infinite reverse; will-change: transform; }
   .scroll-container:hover .animate-scroll-up,
   .scroll-container:hover .animate-scroll-down {
     animation-play-state: paused;
@@ -399,155 +326,68 @@ For commercial licensing, please contact support@quantumnous.com
 
 /* ── Landing page scroll-triggered animations ── */
 @keyframes landing-fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes landing-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes landing-scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-@keyframes landing-fade-left {
-  from {
-    opacity: 0;
-    transform: translateX(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-@keyframes landing-fade-right {
-  from {
-    opacity: 0;
-    transform: translateX(-24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 
-.landing-animate-fade-up {
-  animation: landing-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-.landing-animate-fade-in {
-  animation: landing-fade-in 0.6s ease-out both;
-}
-.landing-animate-scale-in {
-  animation: landing-scale-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-.landing-animate-fade-left {
-  animation: landing-fade-left 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-.landing-animate-fade-right {
-  animation: landing-fade-right 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
+.landing-animate-fade-up { animation: landing-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.landing-animate-fade-in { animation: landing-fade-in 0.6s ease-out both; }
+.landing-animate-scale-in { animation: landing-scale-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 @media (prefers-reduced-motion: reduce) {
   .landing-animate-fade-up,
   .landing-animate-fade-in,
-  .landing-animate-scale-in,
-  .landing-animate-fade-left,
-  .landing-animate-fade-right {
+  .landing-animate-scale-in {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
   }
 }
 
-/* Micro-interactions — Vercel-style subtle hover/active feedback */
+/* Micro-interactions */
 @media (prefers-reduced-motion: no-preference) {
   [data-slot='card'] {
-    transition:
-      transform 150ms ease,
-      box-shadow 150ms ease;
+    transition: transform 150ms ease, box-shadow 150ms ease;
   }
-
   @media (min-width: 641px) {
     [data-slot='card']:hover {
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgb(0 0 0 / 0.06);
-    }
-
-    .dark [data-slot='card']:hover {
       box-shadow: 0 4px 12px rgb(0 0 0 / 0.3);
     }
   }
-
   button:not(:disabled):active,
   [role='button']:not(:disabled):active {
     transform: scale(0.98);
   }
-
   [data-slot='table'] tr {
     transition: background-color 120ms ease;
   }
-
-  /* Table row stagger-in animation */
   [data-slot='table'] tbody tr {
     animation: tableRowEnter 0.2s cubic-bezier(0.33, 1, 0.68, 1) both;
   }
-  [data-slot='table'] tbody tr:nth-child(2) {
-    animation-delay: 25ms;
-  }
-  [data-slot='table'] tbody tr:nth-child(3) {
-    animation-delay: 50ms;
-  }
-  [data-slot='table'] tbody tr:nth-child(4) {
-    animation-delay: 75ms;
-  }
-  [data-slot='table'] tbody tr:nth-child(5) {
-    animation-delay: 100ms;
-  }
-  [data-slot='table'] tbody tr:nth-child(6) {
-    animation-delay: 125ms;
-  }
-  [data-slot='table'] tbody tr:nth-child(7) {
-    animation-delay: 150ms;
-  }
-  [data-slot='table'] tbody tr:nth-child(8) {
-    animation-delay: 175ms;
-  }
-  [data-slot='table'] tbody tr:nth-child(9) {
-    animation-delay: 200ms;
-  }
-  [data-slot='table'] tbody tr:nth-child(10) {
-    animation-delay: 225ms;
-  }
-  [data-slot='table'] tbody tr:nth-child(n + 11) {
-    animation-delay: 250ms;
-  }
+  [data-slot='table'] tbody tr:nth-child(2) { animation-delay: 25ms; }
+  [data-slot='table'] tbody tr:nth-child(3) { animation-delay: 50ms; }
+  [data-slot='table'] tbody tr:nth-child(4) { animation-delay: 75ms; }
+  [data-slot='table'] tbody tr:nth-child(5) { animation-delay: 100ms; }
+  [data-slot='table'] tbody tr:nth-child(6) { animation-delay: 125ms; }
+  [data-slot='table'] tbody tr:nth-child(7) { animation-delay: 150ms; }
+  [data-slot='table'] tbody tr:nth-child(8) { animation-delay: 175ms; }
+  [data-slot='table'] tbody tr:nth-child(9) { animation-delay: 200ms; }
+  [data-slot='table'] tbody tr:nth-child(10) { animation-delay: 225ms; }
+  [data-slot='table'] tbody tr:nth-child(n + 11) { animation-delay: 250ms; }
 }
 
 @keyframes tableRowEnter {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Tabular numbers for data-heavy contexts */
@@ -564,39 +404,21 @@ For commercial licensing, please contact support@quantumnous.com
 
 /* ── Hero terminal demo animations ── */
 @keyframes terminal-demo-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
-.terminal-demo-blink {
-  animation: terminal-demo-blink 1s step-end infinite;
-}
+.terminal-demo-blink { animation: terminal-demo-blink 1s step-end infinite; }
 
 @keyframes terminal-demo-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
-.terminal-demo-spin {
-  animation: terminal-demo-spin 0.8s linear infinite;
-}
+.terminal-demo-spin { animation: terminal-demo-spin 0.8s linear infinite; }
 
 @keyframes terminal-demo-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
-.terminal-demo-pulse {
-  animation: terminal-demo-pulse 1.5s ease-in-out infinite;
-}
+.terminal-demo-pulse { animation: terminal-demo-pulse 1.5s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .terminal-demo-blink,
