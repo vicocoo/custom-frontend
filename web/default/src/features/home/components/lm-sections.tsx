@@ -4,6 +4,7 @@ import { LmFrame } from '@/components/lm/frame'
 import { LmTag, type LmTagVariant } from '@/components/lm/tag'
 import { LmTerminal } from '@/components/lm/terminal'
 import { useStreamLines, type StreamLine } from '@/components/lm/use-stream-lines'
+import { useStarfield } from '@/components/lm/use-starfield'
 
 /* ───────── HERO ───────── */
 
@@ -34,8 +35,14 @@ function HeroTerminal() {
 }
 
 export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const starfieldRef = useRef<HTMLDivElement>(null)
+  useStarfield(starfieldRef)
+
   return (
-    <section className="lm-section" style={{ paddingTop: 48, paddingBottom: 40 }}>
+    <section className="lm-section lm-hero-section" style={{ paddingTop: 80, paddingBottom: 120, minHeight: '100vh', display: 'flex', alignItems: 'center', position: 'relative' }}>
+      {/* Starry sky background */}
+      <div ref={starfieldRef} className="lm-hero-particles" />
+
       <div className="lm-container">
         <div className="lm-grid" style={{ gridTemplateColumns: '1.05fr 1fr', gap: 40, alignItems: 'start' }}>
           {/* Left: copy */}
@@ -64,7 +71,7 @@ export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
 
             <div className="lm-row lm-wrap" style={{ gap: 10, marginBottom: 28 }}>
               <Link to={isAuthenticated ? '/dashboard' : '/sign-up'} className="lm-btn lm-btn-primary lm-btn-lg">
-                <span style={{ fontFamily: 'var(--font-mono)' }}>$</span> 立即开通 · 送 $1 额度
+                <span style={{ fontFamily: 'var(--font-mono)' }}>$</span> 立即开始使用
               </Link>
               <Link to="/" className="lm-btn lm-btn-lg">
                 查看接入文档 <span className="lm-text-muted">→</span>
@@ -74,18 +81,18 @@ export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
             {/* Mini stat strip */}
             <div className="lm-row lm-wrap" style={{ gap: 24 }}>
               <div>
-                <div className="lm-stat-label" style={{ marginBottom: 4 }}>接入模型</div>
-                <div className="lm-tnum" style={{ fontSize: 22, fontWeight: 700 }}>237<span className="lm-text-muted" style={{ fontSize: 14 }}>+</span></div>
+                <div className="lm-stat-label" style={{ marginBottom: 4 }}>主流模型</div>
+                <div className="lm-tnum" style={{ fontSize: 16, fontWeight: 600, color: 'var(--lm-fg-soft)' }}>Mainstream</div>
               </div>
               <div style={{ borderLeft: '1px solid var(--border)', height: 36 }} />
               <div>
-                <div className="lm-stat-label" style={{ marginBottom: 4 }}>日均调用</div>
-                <div className="lm-tnum" style={{ fontSize: 22, fontWeight: 700 }}>48.7<span className="lm-text-muted" style={{ fontSize: 14 }}> M</span></div>
+                <div className="lm-stat-label" style={{ marginBottom: 4 }}>标准接口</div>
+                <div className="lm-tnum" style={{ fontSize: 16, fontWeight: 600, color: 'var(--lm-fg-soft)' }}>Standard</div>
               </div>
               <div style={{ borderLeft: '1px solid var(--border)', height: 36 }} />
               <div>
-                <div className="lm-stat-label" style={{ marginBottom: 4 }}>P50 首字延迟</div>
-                <div className="lm-tnum lm-text-accent" style={{ fontSize: 22, fontWeight: 700 }}>184<span className="lm-text-muted" style={{ fontSize: 14 }}> ms</span></div>
+                <div className="lm-stat-label" style={{ marginBottom: 4 }}>透明计费</div>
+                <div className="lm-tnum" style={{ fontSize: 16, fontWeight: 600, color: 'var(--lm-fg-soft)' }}>Transparent</div>
               </div>
             </div>
           </div>
@@ -108,7 +115,11 @@ export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
       {/* Responsive override */}
       <style>{`
         @media (max-width: 1024px) {
-          .lm-section .lm-grid[style*="1.05fr"] { grid-template-columns: 1fr !important; gap: 28px !important; }
+          .lm-hero-section .lm-grid[style*="1.05fr"] { grid-template-columns: 1fr !important; gap: 28px !important; }
+        }
+        @media (max-width: 720px) {
+          .lm-hero-section .lm-terminal .lm-terminal-body { font-size: 11.5px !important; padding: 14px 14px 18px !important; }
+          .lm-hero-section .lm-terminal .term-meta { display: none !important; }
         }
       `}</style>
     </section>

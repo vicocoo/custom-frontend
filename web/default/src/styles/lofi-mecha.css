@@ -208,7 +208,7 @@ body::after {
 }
 .lm-btn-primary:hover { background: oklch(92% 0.22 128); color: var(--lm-bg-deep); }
 .lm-btn-ghost { background: transparent; }
-.lm-btn-lg { height: 42px; padding: 0 22px; font-size: 13px; }
+.lm-btn-lg { height: 50px; padding: 0 24px; font-size: 13.5px; }
 
 /* Language switch */
 .lm-lang-switch {
@@ -548,8 +548,8 @@ body::after {
 }
 .lm-field label .req { color: var(--lm-accent); }
 .lm-input, .lm-textarea, .lm-select {
-  height: 40px;
-  padding: 0 12px;
+  height: 48px;
+  padding: 0 14px;
   background: var(--lm-bg-deep);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -559,7 +559,7 @@ body::after {
   width: 100%;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
-.lm-textarea { padding: 10px 12px; height: auto; min-height: 88px; resize: vertical; }
+.lm-textarea { padding: 12px 14px; height: auto; min-height: 88px; resize: vertical; }
 .lm-input:focus, .lm-textarea:focus, .lm-select:focus {
   outline: none;
   border-color: var(--lm-accent);
@@ -574,12 +574,13 @@ body::after {
   border-radius: 3px;
   background: var(--lm-bg-deep);
   overflow: hidden;
+  height: 48px;
 }
-.lm-input-group .lm-input { border: none; box-shadow: none; background: transparent; }
+.lm-input-group .lm-input { border: none; box-shadow: none; background: transparent; height: 100%; }
 .lm-input-group .lm-input:focus { box-shadow: none; }
 .lm-input-group .prefix,
 .lm-input-group .suffix {
-  padding: 0 12px;
+  padding: 0 14px;
   color: var(--muted-foreground);
   font-size: 12px;
   white-space: nowrap;
@@ -744,7 +745,7 @@ body::after {
 }
 @media (max-width: 960px) {
   .lm-auth-shell { grid-template-columns: 1fr; }
-  .lm-auth-aside { display: none; }
+  .lm-auth-aside { display: none !important; }
 }
 .lm-auth-form {
   padding: 48px 40px;
@@ -761,10 +762,18 @@ body::after {
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 24px;
   background: var(--lm-bg-deep);
   overflow: hidden;
+  position: relative;
+}
+.lm-auth-aside::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(180deg, transparent 0 80px, oklch(86% 0.22 128 / 0.018) 80px 81px);
+  pointer-events: none;
 }
 .lm-auth-aside.order-first {
   border-left: none;
@@ -821,6 +830,9 @@ body::after {
   max-height: 260px;
   overflow: hidden;
   mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  flex: 1;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
 }
 .lm-boot-log .ok { color: var(--lm-accent); }
 .lm-boot-log .warn { color: var(--lm-amber); }
@@ -971,3 +983,177 @@ body::after {
   transition: opacity 0.2s ease;
 }
 .lm-side-drawer-mask.is-open { opacity: 1; pointer-events: auto; }
+
+/* ---------- Hero starfield effect ---------- */
+.lm-hero-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(ellipse at top, rgba(20, 30, 48, 0.3) 0%, transparent 60%);
+}
+
+/* Stars with different sizes and twinkle effects */
+.lm-star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  animation: lm-twinkle 3s ease-in-out infinite;
+}
+
+/* Small stars */
+.lm-star.size-1 {
+  width: 1px;
+  height: 1px;
+  box-shadow: 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Medium stars */
+.lm-star.size-2 {
+  width: 2px;
+  height: 2px;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.9), 0 0 8px rgba(134, 239, 172, 0.3);
+}
+
+/* Large stars */
+.lm-star.size-3 {
+  width: 3px;
+  height: 3px;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 1), 0 0 12px rgba(134, 239, 172, 0.5);
+}
+
+/* Accent stars (green tint) */
+.lm-star.accent {
+  background: var(--lm-accent);
+  box-shadow: 0 0 8px var(--lm-accent), 0 0 16px var(--lm-accent);
+}
+
+/* Twinkle animation with varied timing */
+@keyframes lm-twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.lm-star:nth-child(2n) { animation-duration: 4s; animation-delay: 0.5s; }
+.lm-star:nth-child(3n) { animation-duration: 5s; animation-delay: 1s; }
+.lm-star:nth-child(5n) { animation-duration: 3.5s; animation-delay: 1.5s; }
+
+/* Constellation lines - subtle and delicate */
+.lm-constellation-line {
+  stroke-dasharray: 3 6;
+  animation: lm-lineGlow 5s ease-in-out infinite;
+}
+
+@keyframes lm-lineGlow {
+  0%, 100% { opacity: 0.08; }
+  50% { opacity: 0.18; }
+}
+
+.lm-constellations-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ============================================================
+   LIGHT THEME OVERRIDES
+   ============================================================ */
+
+.light .lm-hero-particles {
+  background: radial-gradient(ellipse at top, rgba(200, 220, 240, 0.2) 0%, transparent 60%);
+}
+
+/* Light theme stars */
+.light .lm-star {
+  background: oklch(30% 0.02 130);
+  box-shadow: 0 0 2px oklch(30% 0.02 130);
+}
+
+.light .lm-star.size-2 {
+  box-shadow: 0 0 4px oklch(30% 0.02 130), 0 0 8px oklch(48% 0.20 128 / 0.3);
+}
+
+.light .lm-star.size-3 {
+  box-shadow: 0 0 6px oklch(30% 0.02 130), 0 0 12px oklch(48% 0.20 128 / 0.4);
+}
+
+.light .lm-star.accent {
+  background: oklch(38% 0.18 130);
+  box-shadow: 0 0 8px oklch(38% 0.18 130), 0 0 16px oklch(38% 0.18 130);
+}
+
+.light .lm-constellation-line {
+  stroke: rgba(60, 120, 80, 0.12);
+}
+
+.light body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, oklch(92% 0.03 130 / 0.35), transparent 60%),
+    linear-gradient(180deg, oklch(97% 0.004 130) 0%, oklch(95% 0.005 130) 100%);
+}
+
+.light body::before {
+  background-image:
+    linear-gradient(to right, oklch(88% 0.012 130 / 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(88% 0.012 130 / 0.12) 1px, transparent 1px);
+}
+
+.light body::after {
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0,
+    transparent 3px,
+    oklch(100% 0 0 / 0.03) 3px,
+    oklch(100% 0 0 / 0.03) 4px
+  );
+}
+
+.light ::selection {
+  background: var(--lm-accent);
+  color: white;
+}
+
+.light ::-webkit-scrollbar-track { background: var(--lm-bg-deep); }
+.light ::-webkit-scrollbar-thumb { background: var(--lm-surface-3); border: 2px solid var(--lm-bg-deep); }
+
+.light .lm-topbar {
+  background: oklch(97% 0.004 130 / 0.95);
+  border-bottom: 1px solid oklch(86% 0.012 130);
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.08);
+}
+
+.light .lm-brand-mark::after {
+  border: 1px dashed oklch(100% 0 0 / 0.5);
+}
+
+.light .lm-terminal {
+  background: oklch(96% 0.004 130);
+  box-shadow: 0 4px 20px oklch(0% 0 0 / 0.08);
+}
+
+.light .lm-terminal:hover {
+  box-shadow: 0 4px 30px oklch(48% 0.20 128 / 0.15);
+}
+
+.light .lm-btn-primary {
+  color: white;
+  box-shadow: 0 4px 12px var(--lm-accent-glow);
+}
+
+.light .lm-btn-primary:hover {
+  box-shadow: 0 4px 20px var(--lm-accent-glow), 0 8px 24px rgba(0,0,0,0.1);
+}
+
+.light .lm-scanline-overlay::after {
+  background: linear-gradient(180deg, transparent 0%, oklch(48% 0.20 128 / 0.06) 50%, transparent 100%);
+}
+
+.light .lm-side-drawer {
+  background: oklch(100% 0 0);
+}
+
+.light .lm-side-drawer-mask {
+  background: oklch(92% 0.03 130 / 0.6);
+}

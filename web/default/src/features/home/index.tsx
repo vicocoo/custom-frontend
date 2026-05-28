@@ -3,14 +3,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { Markdown } from '@/components/ui/markdown'
 import { LmTopbar } from '@/components/lm/topbar'
 import { LmFooter } from '@/components/lm/footer'
-import {
-  HeroSection,
-  CapabilityMatrix,
-  ModelsPreview,
-  QuickstartCode,
-  WhySection,
-  CtaSection,
-} from './components/lm-sections'
+import { HeroSection } from './components/lm-sections'
 import { useHomePageContent } from './hooks'
 
 export function Home() {
@@ -55,12 +48,6 @@ export function Home() {
     <div className="lm-shell">
       <LmTopbar />
       <HeroSection isAuthenticated={isAuthenticated} />
-      <div className="lm-hazard-stripe" aria-hidden="true" />
-      <CapabilityMatrix />
-      <ModelsPreview />
-      <QuickstartCode />
-      <WhySection />
-      <CtaSection isAuthenticated={isAuthenticated} />
       <LmFooter />
     </div>
   )
