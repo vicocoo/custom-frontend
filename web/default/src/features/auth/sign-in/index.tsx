@@ -25,8 +25,8 @@ export function SignIn() {
         <LmAsciiBox>
 {`┌───────────────────────────┐
 │                           │
-│   ${brand.toUpperCase().padEnd(23, ' ')} │
-│   ─────────────────────   │
+│   ${brand.toUpperCase().padEnd(23, ' ')}│
+│   ---------------------   │
 │   AUTH  MODULE            │
 │                           │
 └───────────────────────────┘`}

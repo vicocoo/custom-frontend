@@ -9,16 +9,27 @@ import { useStarfield } from '@/components/lm/use-starfield'
 /* ───────── HERO ───────── */
 
 const terminalDemoLines: StreamLine[] = [
-  { parts: [{ text: '$ ', cls: 'lm-term-prompt' }, { text: 'curl ', cls: 'lm-term-fn' }, { text: 'https://api.qnous.ai/v1/chat/completions \\', cls: 'lm-term-string' }] },
-  { parts: [{ text: '   -H ' }, { text: '"Authorization: Bearer sk-qn-', cls: 'lm-term-string' }, { text: '0xA1F3...REDACTED', cls: 'lm-term-key' }, { text: '" \\', cls: 'lm-term-string' }] },
-  { parts: [{ text: '   -d ' }, { text: '\'{"model":"claude-opus-4.1","stream":true,"messages":[...]}\'', cls: 'lm-term-string' }] },
-  { html: '<span class="lm-term-line"><span class="lm-term-comment">// 路由命中: tier-1.us-west · 镜像 03 · TTFB 184ms</span></span>' },
-  { parts: [{ text: 'data: ', cls: 'lm-term-comment' }, { text: '{"choices":[{"delta":{"content":"', cls: 'lm-term-out' }, { text: '你好', cls: 'lm-term-string' }, { text: '"}}]}', cls: 'lm-term-out' }] },
-  { parts: [{ text: 'data: ', cls: 'lm-term-comment' }, { text: '{"choices":[{"delta":{"content":"', cls: 'lm-term-out' }, { text: '我是部署在 QuantumNous', cls: 'lm-term-string' }, { text: '"}}]}', cls: 'lm-term-out' }] },
-  { parts: [{ text: 'data: ', cls: 'lm-term-comment' }, { text: '{"choices":[{"delta":{"content":"', cls: 'lm-term-out' }, { text: ' 网关上的 Claude Opus 4.1', cls: 'lm-term-string' }, { text: '"}}]}', cls: 'lm-term-out' }] },
-  { parts: [{ text: 'data: ', cls: 'lm-term-comment' }, { text: '{"choices":[{"delta":{"content":"', cls: 'lm-term-out' }, { text: '，可以帮你调用 200+ 模型 ✦', cls: 'lm-term-string' }, { text: '"}}]}', cls: 'lm-term-out' }] },
-  { parts: [{ text: 'data: ', cls: 'lm-term-comment' }, { text: '[DONE]', cls: 'lm-term-kw' }] },
-  { html: '<span class="lm-term-line"><span class="lm-term-comment">// 用量结算 ── 输入 28 token · 输出 47 token · ¥0.005184</span></span>' },
+  { parts: [{ text: '$ ', cls: 'lm-term-prompt' }, { text: 'curl ', cls: 'lm-term-fn' }, { text: 'https://api.gcgcode.cc/v1/chat/completions \\', cls: 'lm-term-string' }] },
+  { parts: [{ text: '   -H ' }, { text: '"Content-Type: application/json" \\', cls: 'lm-term-string' }] },
+  { parts: [{ text: '   -H ' }, { text: '"Authorization: Bearer sk-', cls: 'lm-term-string' }, { text: '0xA1F3...', cls: 'lm-term-key' }, { text: '" \\', cls: 'lm-term-string' }] },
+  { parts: [{ text: '   -d ' }, { text: '\'{"model":"gpt-4","messages":[{"role":"user","content":"你好"}]}\'', cls: 'lm-term-string' }] },
+  { html: '<span class="lm-term-line"><span class="lm-term-comment">// 智能路由 → us-west-1 · 延迟 178ms</span></span>' },
+  { parts: [{ text: '{', cls: 'lm-term-out' }] },
+  { parts: [{ text: '  "id": ', cls: 'lm-term-out' }, { text: '"chatcmpl-A1F3x7"', cls: 'lm-term-string' }, { text: ',', cls: 'lm-term-out' }] },
+  { parts: [{ text: '  "object": ', cls: 'lm-term-out' }, { text: '"chat.completion"', cls: 'lm-term-string' }, { text: ',', cls: 'lm-term-out' }] },
+  { parts: [{ text: '  "choices": [', cls: 'lm-term-out' }] },
+  { parts: [{ text: '    {', cls: 'lm-term-out' }] },
+  { parts: [{ text: '      "message": {', cls: 'lm-term-out' }] },
+  { parts: [{ text: '        "role": ', cls: 'lm-term-out' }, { text: '"assistant"', cls: 'lm-term-string' }, { text: ',', cls: 'lm-term-out' }] },
+  { parts: [{ text: '        "content": ', cls: 'lm-term-out' }, { text: '"你好！我是 AI 助手，很高兴为你服务。有什么我可以帮助你的吗？"', cls: 'lm-term-string' }] },
+  { parts: [{ text: '      }', cls: 'lm-term-out' }] },
+  { parts: [{ text: '    }', cls: 'lm-term-out' }] },
+  { parts: [{ text: '  ],', cls: 'lm-term-out' }] },
+  { parts: [{ text: '  "usage": {', cls: 'lm-term-out' }] },
+  { parts: [{ text: '    "prompt_tokens": ', cls: 'lm-term-out' }, { text: '8', cls: 'lm-term-kw' }, { text: ', "completion_tokens": ', cls: 'lm-term-out' }, { text: '23', cls: 'lm-term-kw' }, { text: ', "total_tokens": ', cls: 'lm-term-out' }, { text: '31', cls: 'lm-term-kw' }] },
+  { parts: [{ text: '  }', cls: 'lm-term-out' }] },
+  { parts: [{ text: '}', cls: 'lm-term-out' }] },
+  { html: '<span class="lm-term-line"><span class="lm-term-comment">// 计费: ¥0.0042 · 响应时间: 1.2s</span></span>' },
 ]
 
 function HeroTerminal() {
@@ -26,10 +37,11 @@ function HeroTerminal() {
   useStreamLines(ref, terminalDemoLines, { charDelay: 12, lineDelay: 180, loop: true })
   return (
     <LmTerminal
-      title={<>~/quantum <b>// curl</b></>}
+      title={<>~/code-terminal <b>// curl</b></>}
       meta="PID 0xA1F3 · TTY pts/7"
+      minHeight="520px"
     >
-      <div ref={ref} style={{ minHeight: 220 }} aria-live="polite" />
+      <div ref={ref} aria-live="polite" />
     </LmTerminal>
   )
 }
@@ -54,19 +66,16 @@ export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
             </div>
 
             <h1 style={{ fontSize: 'clamp(34px, 5.6vw, 68px)', fontWeight: 800, lineHeight: 1.05, letterSpacing: '-0.025em', marginBottom: 18 }}>
-              一个口令<br />
+              一个接口<br />
               <span className="lm-text-accent">整片星河</span>
               <span className="lm-cursor" style={{ verticalAlign: 0, height: '0.78em' }} />
             </h1>
 
             <p style={{ fontSize: 15, color: 'var(--lm-fg-soft)', maxWidth: '52ch', marginBottom: 8, lineHeight: 1.7 }}>
-              <span className="lm-text-accent" style={{ fontFamily: 'var(--font-mono)' }}>QuantumNous</span> 是一台跑在你 Prompt 之上的统一推理网关 ——
-              <b style={{ color: 'var(--foreground)' }}>200+ 主流大模型</b>，
-              <b style={{ color: 'var(--foreground)' }}>单一 OpenAI 兼容端点</b>，
-              <b style={{ color: 'var(--foreground)' }}>毫秒级智能路由</b>。
+              <span className="lm-text-accent" style={{ fontFamily: 'var(--font-mono)' }}>GCG Code</span> —— 统一调用全球顶尖模型
             </p>
             <p className="lm-text-muted" style={{ fontSize: 13, marginBottom: 28 }}>
-              <span style={{ fontFamily: 'var(--font-mono)' }}>// 把账号、密钥、限流、计费、降级、重试都交给我们 — 你只管写 prompt。</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>// 你只管写 prompt，其余的交给我们</span>
             </p>
 
             <div className="lm-row lm-wrap" style={{ gap: 10, marginBottom: 28 }}>
