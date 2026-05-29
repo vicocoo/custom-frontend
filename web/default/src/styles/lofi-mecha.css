@@ -413,7 +413,8 @@ body::after {
 .lm-terminal-bar .term-meta { margin-left: auto; font-size: 11px; color: var(--muted-foreground); }
 .lm-terminal-body {
   padding: 18px;
-  min-height: 220px;
+  height: 460px;
+  overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.65;
@@ -876,6 +877,10 @@ body::after {
   color: var(--lm-accent);
   font-size: 12px;
   line-height: 1.4;
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  font-variant-ligatures: none;
+  font-feature-settings: normal;
 }
 .lm-divider-x {
   display: block;

@@ -13,6 +13,8 @@ export function SignIn() {
   const { status } = useStatus()
   const { systemName } = useSystemConfig()
   const brand = systemName || 'New API'
+  const brandUpper = brand.toUpperCase()
+  const brandPadded = brandUpper.length > 21 ? brandUpper.slice(0, 21) : brandUpper.padEnd(21, ' ')
 
   return (
     <LmAuthLayout
@@ -23,13 +25,13 @@ export function SignIn() {
       asideSector="SECTOR-A"
       asideContent={
         <LmAsciiBox>
-{`┌───────────────────────────┐
-│                           │
-│   ${brand.toUpperCase().padEnd(23, ' ')}│
-│   ---------------------   │
-│   AUTH  MODULE            │
-│                           │
-└───────────────────────────┘`}
+{`┌─────────────────────────┐
+│                         │
+│  ${brandPadded}  │
+│  ---------------------  │
+│  AUTH  MODULE           │
+│                         │
+└─────────────────────────┘`}
         </LmAsciiBox>
       }
     >
