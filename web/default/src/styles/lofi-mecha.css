@@ -414,13 +414,15 @@ body::after {
 .lm-terminal-body {
   padding: 18px;
   height: 460px;
-  overflow-y: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.65;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+}
+.lm-terminal-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 .lm-term-line { display: block; }
 .lm-term-prompt { color: var(--lm-accent); margin-right: 6px; }

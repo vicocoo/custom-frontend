@@ -28,6 +28,12 @@ export function useStreamLines(
     const { charDelay = 14, lineDelay = 60, loop = false } = opts
     const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+    const scrollToBottom = () => {
+      if (el.parentElement) {
+        el.parentElement.scrollTop = el.parentElement.scrollHeight
+      }
+    }
+
     const renderOnce = async () => {
       el.innerHTML = ''
 
@@ -36,6 +42,7 @@ export function useStreamLines(
 
         if (line.html) {
           el.insertAdjacentHTML('beforeend', line.html)
+          scrollToBottom()
           await delay(lineDelay)
           continue
         }
@@ -53,6 +60,7 @@ export function useStreamLines(
             for (const ch of part.text) {
               if (!activeRef.current) return
               partSpan.textContent += ch
+              scrollToBottom()
               await delay(charDelay)
             }
           }
@@ -63,6 +71,7 @@ export function useStreamLines(
           for (const ch of line.text) {
             if (!activeRef.current) return
             textSpan.textContent += ch
+            scrollToBottom()
             await delay(charDelay)
           }
         }
@@ -70,15 +79,18 @@ export function useStreamLines(
         const cursor = document.createElement('span')
         cursor.className = 'lm-cursor'
         span.appendChild(cursor)
+        scrollToBottom()
         await delay(lineDelay)
         cursor.remove()
 
         el.insertAdjacentHTML('beforeend', '\n')
+        scrollToBottom()
       }
 
       const finalCursor = document.createElement('span')
       finalCursor.className = 'lm-cursor'
       el.appendChild(finalCursor)
+      scrollToBottom()
     }
 
     const run = async () => {
