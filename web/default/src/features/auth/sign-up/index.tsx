@@ -2,7 +2,6 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { useStatus } from '@/hooks/use-status'
 import { LmAuthLayout } from '@/components/lm/auth-layout'
-import { LmAsciiBox } from '@/components/lm/ascii-box'
 import { LmFrame } from '@/components/lm/frame'
 import { TermsFooter } from '../components/terms-footer'
 import { SignUpForm } from './components/sign-up-form'
@@ -40,19 +39,15 @@ export function SignUp() {
       asideSector="SECTOR-B"
       asideContent={
         <>
-          <LmAsciiBox>
-{`┌──────────────────┐
-│ 1. Submit info   │
-└────────┬─────────┘
-         ▼
-┌──────────────────┐
-│ 2. Verify email  │
-└────────┬─────────┘
-         ▼
-┌──────────────────┐
-│ 3. Get API key   │
-└──────────────────┘`}
-          </LmAsciiBox>
+          <LmFrame corners style={{ padding: '20px' }}>
+            <div style={{ fontSize: 13, color: 'var(--lm-fg-soft)', lineHeight: 1.8 }}>
+              <div style={{ marginBottom: 12 }}>1. Submit info</div>
+              <div style={{ marginLeft: 20, marginBottom: 12, color: 'var(--lm-muted)' }}>↓</div>
+              <div style={{ marginBottom: 12 }}>2. Verify email</div>
+              <div style={{ marginLeft: 20, marginBottom: 12, color: 'var(--lm-muted)' }}>↓</div>
+              <div>3. Get API key</div>
+            </div>
+          </LmFrame>
           <WelcomeCard />
         </>
       }

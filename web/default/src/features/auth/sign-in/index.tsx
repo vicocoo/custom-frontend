@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { LmAuthLayout } from '@/components/lm/auth-layout'
-import { LmAsciiBox } from '@/components/lm/ascii-box'
+import { LmFrame } from '@/components/lm/frame'
 import { TermsFooter } from '../components/terms-footer'
 import { UserAuthForm } from './components/user-auth-form'
 
@@ -13,8 +13,6 @@ export function SignIn() {
   const { status } = useStatus()
   const { systemName } = useSystemConfig()
   const brand = systemName || 'New API'
-  const brandUpper = brand.toUpperCase()
-  const brandPadded = brandUpper.length > 21 ? brandUpper.slice(0, 21) : brandUpper.padEnd(21, ' ')
 
   return (
     <LmAuthLayout
@@ -24,15 +22,18 @@ export function SignIn() {
       asideTag="// AUTH GATE"
       asideSector="SECTOR-A"
       asideContent={
-        <LmAsciiBox>
-{`┌─────────────────────────┐
-│                         │
-│  ${brandPadded}  │
-│  ---------------------  │
-│  AUTH  MODULE           │
-│                         │
-└─────────────────────────┘`}
-        </LmAsciiBox>
+        <LmFrame corners style={{ padding: '28px', textAlign: 'center' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12, color: 'var(--foreground)' }}>
+            {brand.toUpperCase()}
+          </div>
+          <div style={{
+            borderTop: '1px dashed var(--border)',
+            margin: '12px 0',
+          }} />
+          <div style={{ fontSize: 13, color: 'var(--lm-fg-soft)', letterSpacing: '0.1em' }}>
+            AUTH MODULE
+          </div>
+        </LmFrame>
       }
     >
       <div style={{ marginBottom: 8 }}>
