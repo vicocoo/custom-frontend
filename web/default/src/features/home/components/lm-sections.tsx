@@ -67,7 +67,7 @@ export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
 
             <h1 style={{ fontSize: 'clamp(34px, 5.6vw, 68px)', fontWeight: 800, lineHeight: 1.05, letterSpacing: '-0.025em', marginBottom: 18 }}>
               一个接口<br />
-              <span className="lm-text-accent">整片星河</span>
+              <span className="lm-text-accent lm-text-accent-glow">整片星河</span>
               <span className="lm-cursor" style={{ verticalAlign: 0, height: '0.78em' }} />
             </h1>
 
