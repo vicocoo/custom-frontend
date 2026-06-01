@@ -2,14 +2,14 @@
 
 ## Summary
 
-Add an optional automatic user ban workflow for upstream `sub2api` content-risk audit responses. When an upstream response is HTTP 403 and matches a known content-policy violation shape, new-api records the event in a dedicated audit database, counts recent events for that user within a configured time window, and disables the user in the main new-api database when the threshold is reached.
+Add an optional automatic user ban workflow for upstream `sub2api` content-risk audit responses. When an upstream response is HTTP 403 and its normalized error message starts with a configured block-message prefix, new-api records the event in a dedicated audit database, counts recent events for that user within a configured time window, and disables the user in the main new-api database when the threshold is reached.
 
 The feature must keep the core relay flow easy to merge with upstream. The relay path should only call a small hook after an upstream error is normalized. Storage, matching, extraction, counting, and admin APIs live in an isolated package/module.
 
 ## Goals
 
 - Detect risk audit blocks returned by upstream `sub2api`.
-- Record a minimal audit event: stable user/token/channel IDs, request time, endpoint/format, upstream error fields needed for verification, and the relevant user input that triggered the event.
+- Record a minimal audit event: stable user/token/channel IDs, request time, endpoint/format, the matched block message, and the relevant user input that triggered the event.
 - Use an independent audit database for all risk records and feature configuration.
 - Disable the actual new-api user only when the configured threshold is met.
 - Provide backend APIs for an external management frontend to view settings, events, banned users, and clear audit records.
@@ -42,7 +42,7 @@ Use an internal package named `risk` or `service/riskban` with these responsibil
 
 - `risk/config`: read/write feature settings from the audit database.
 - `risk/store`: initialize and query the dedicated audit database.
-- `risk/detect`: match normalized upstream errors against supported policy violation signatures.
+- `risk/detect`: match normalized upstream errors by status code and configured block-message prefix.
 - `risk/input`: extract the current/last user input from the cached original request.
 - `risk/service`: record minimal events, count recent events, and disable users when needed.
 - `controller/riskban.go`: expose management APIs for the external frontend.
@@ -50,41 +50,26 @@ Use an internal package named `risk` or `service/riskban` with these responsibil
 The relay integration should be a small call after an upstream error is available and before retry/channel-auto-ban decisions are made:
 
 ```go
-riskban.ObserveRelayError(c, relayInfo, newAPIError)
+matchedRisk := riskban.ObserveRelayError(c, relayInfo, newAPIError)
 ```
 
 That hook should return quickly and must never change the client-facing response. If the audit database is unavailable, it logs the issue and skips the feature instead of failing user relay traffic.
 
-The hook may be called inside the retry loop, but it must be idempotent by request id. A matched risk error must mark the request as non-retryable so one user request cannot be counted multiple times and cannot be retried onto another channel after a policy block.
+The hook may be called inside the retry loop, but it must be idempotent by request id. When `matchedRisk` is true, the relay loop should stop retrying and skip channel auto-disable handling for that error so one user request cannot be counted multiple times and cannot be retried onto another channel after a policy block.
 
 ## Detection Rules
 
 Only count a risk event when:
 
-- Upstream status code is `403`.
-- The normalized or raw upstream error matches one of these signatures:
-  - Anthropic / Claude Messages: top-level `type = "error"` and `error.type = "content_policy_violation"`.
-  - OpenAI Chat / Images / generic OpenAI: `error.type = "content_policy_violation"`.
-  - OpenAI Responses: `error.code = "content_policy_violation"`.
-  - Gemini: `error.code = 403` and `error.status = "PERMISSION_DENIED"`.
+- The observed relay error status code is `403`.
+- `block_message_prefix` is configured and non-empty.
+- The normalized upstream error message starts with `block_message_prefix`.
 
-The message should be stored as text. If the message contains a trailing hash suffix such as `(hash: ...)`, store both the full message and the parsed hash when parsing is reliable. If parsing is not reliable, keep the full message and leave hash empty.
+The normalized message should come from the current `types.NewAPIError` before the final response wrapper appends the request id. Prefer `newAPIError.Error()` because it is closest to the upstream message captured by `service.RelayErrorHandler`; only fall back to `newAPIError.ToOpenAIError().Message` when the direct error message is empty.
 
-The hook should prefer compact raw upstream response fields captured on `types.NewAPIError`. If only the current normalized fields are available, it can match:
+The message should be stored as text. If the message contains a trailing hash suffix such as `(hash: ...)`, store both the full message and the parsed hash. A strict suffix parser is enough for the first version, for example matching only a final `"(hash: ...)"` segment and leaving `risk_hash` empty when the suffix is absent or malformed.
 
-- `newAPIError.StatusCode == http.StatusForbidden`
-- `newAPIError.GetErrorCode() == "content_policy_violation"` or `newAPIError.ToOpenAIError().Type == "content_policy_violation"`
-- Gemini-specific fields captured in raw error metadata if added later
-
-Raw error metadata is required for reliable Gemini detection because the existing OpenAI-compatible normalization does not preserve Gemini's `error.status = "PERMISSION_DENIED"` field. Add this centrally in `service.RelayErrorHandler` by attaching compact fields to `types.NewAPIError`, not by parsing separately in every channel adaptor.
-
-Required small changes to existing new-api files:
-
-- `types/error.go`: add fields or metadata accessors for original upstream status code and compact upstream error details, for example type/code/status/message.
-- `service/error.go`: while reading the upstream error body, extract compact raw error fields and attach them to `NewAPIError`; also preserve the upstream HTTP status before any status-code mapping.
-- `dto/error.go` or a new risk parser helper: optionally add a small struct/helper for extracting `error.type`, `error.code`, `error.status`, and `error.message`.
-
-These changes are intentionally central and should avoid edits in provider-specific adaptor files.
+This design intentionally does not parse or match provider-specific `error.type`, `error.code`, or `error.status` fields. The configured block-message prefix is the single risk signature across Anthropic / Claude Messages, OpenAI Chat / Images, OpenAI Responses, and Gemini responses.
 
 ## User Input Extraction
 
@@ -109,7 +94,7 @@ Default stored data:
 - Stable identifiers: `user_id`, `token_id`, `channel_id`, and `channel_type`.
 - Request classification: request id, relay format/mode, model, and path.
 - Trigger evidence: extracted current/last user input, truncated to `input_max_chars`.
-- Detection evidence: upstream status code, matched error type/code/status, message, and parsed hash if present.
+- Detection evidence: observed 403 status code, matched block-message prefix, upstream message, and parsed hash if present.
 - Decision fields: created time, whether the event counted, and whether it triggered a ban.
 
 Default omitted data:
@@ -143,6 +128,7 @@ Suggested tables:
 - `enabled`
 - `window_seconds`
 - `threshold`
+- `block_message_prefix`
 - `input_max_chars`
 - `admin_api_enabled`
 - `created_at`
@@ -153,8 +139,11 @@ There should be one active settings row. Defaults:
 - `enabled = false`
 - `window_seconds = 86400`
 - `threshold = 3`
+- `block_message_prefix = ""`
 - `input_max_chars = 12000`
 - `admin_api_enabled = true`
+
+The feature should not count any event while `block_message_prefix` is empty, even if `enabled = true`. The external management frontend should require or warn for a non-empty prefix before enabling automatic bans.
 
 ### `risk_ban_events`
 
@@ -171,10 +160,8 @@ There should be one active settings row. Defaults:
 - `input_text`
 - `input_char_count`
 - `input_truncated`
-- `upstream_status_code`
-- `error_type`
-- `error_code`
-- `error_status`
+- `status_code`
+- `matched_prefix`
 - `error_message`
 - `risk_hash`
 - `created_at`
@@ -223,9 +210,9 @@ The disable operation should reuse the model layer rather than calling the HTTP 
 
 The disable operation must be idempotent. Update the main user row only when the user is currently enabled, and avoid writing duplicate `auto_ban` action rows for the same user and threshold window. The implementation can use a transaction, a user-level lock, or a uniqueness strategy keyed by user and active window to avoid duplicate auto-ban records under concurrent requests.
 
-Risk policy blocks should not trigger channel auto-ban. This can be achieved either by marking the matched error as non-channel-disabling before `processChannelError` evaluates it, or by running risk detection before channel auto-ban and skipping the channel disable path for matched content-risk events.
+Risk policy blocks should not trigger channel auto-ban. Run risk detection before `processChannelError`; if `matchedRisk` is true, record/count the event, stop retrying, and skip the channel disable path for that error.
 
-Status-code mapping does not need a new core behavior change if operators avoid mapping upstream 403 policy blocks to another code in new-api. The risk management frontend should warn that mapping `403` away can prevent or confuse risk audit handling. The implementation should store the original upstream status in `upstream_status_code` before mapping so future mappings are safer.
+Status-code mapping does not need a new core behavior change if operators avoid mapping upstream 403 policy blocks to another code in new-api. This minimal design matches the observed `NewAPIError.StatusCode`; if channel status-code mapping changes 403 to another code before the risk hook runs, detection can be missed. The risk management frontend should warn that mapping `403` away can prevent risk audit handling.
 
 Similarly, new-api's channel auto-disable settings do not need a core restriction if operators keep `403` out of `AutomaticDisableStatusCodes`. The external risk management frontend should warn that adding `403` to channel auto-disable status codes can disable channels for user policy violations.
 
@@ -290,10 +277,11 @@ Keep upstream conflict risk low:
 
 Unit tests:
 
-- Match all four supported error shapes.
+- Match HTTP 403 errors whose normalized message starts with the configured prefix.
+- Verify the same prefix works for normalized Anthropic / Claude Messages, OpenAI Chat / Images, OpenAI Responses, and Gemini error messages.
 - Reject non-403 responses.
-- Reject unrelated 403 errors.
-- Verify original upstream 403 is preserved when status-code mapping changes the client-facing status.
+- Reject 403 responses with a missing, empty, or non-matching prefix.
+- Parse a trailing `(hash: ...)` suffix from the message.
 - Verify a matched risk error is not retried and is counted at most once per request id.
 - Verify matched risk errors do not auto-disable channels.
 - Extract last user input from OpenAI Chat, Claude Messages, Gemini, Responses, and Images.
@@ -303,7 +291,7 @@ Unit tests:
 
 Integration tests:
 
-- Simulate a relay error that matches content policy violation.
+- Simulate a relay error whose 403 message starts with the configured block-message prefix.
 - Confirm an event is written to the audit DB.
 - Confirm user is disabled when threshold is reached.
 - Confirm root user is not disabled.
