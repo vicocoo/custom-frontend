@@ -47,13 +47,15 @@ Use an internal package named `risk` or `service/riskban` with these responsibil
 - `risk/service`: record minimal events, count recent events, and disable users when needed.
 - `controller/riskban.go`: expose management APIs for the external frontend.
 
-The relay integration should be a single call after an upstream error is available:
+The relay integration should be a small call after an upstream error is available and before retry/channel-auto-ban decisions are made:
 
 ```go
 riskban.ObserveRelayError(c, relayInfo, newAPIError)
 ```
 
 That hook should return quickly and must never change the client-facing response. If the audit database is unavailable, it logs the issue and skips the feature instead of failing user relay traffic.
+
+The hook may be called inside the retry loop, but it must be idempotent by request id. A matched risk error must mark the request as non-retryable so one user request cannot be counted multiple times and cannot be retried onto another channel after a policy block.
 
 ## Detection Rules
 
@@ -68,13 +70,21 @@ Only count a risk event when:
 
 The message should be stored as text. If the message contains a trailing hash suffix such as `(hash: ...)`, store both the full message and the parsed hash when parsing is reliable. If parsing is not reliable, keep the full message and leave hash empty.
 
-The hook should prefer raw upstream response fields if available. If only `types.NewAPIError` is available, it can match:
+The hook should prefer compact raw upstream response fields captured on `types.NewAPIError`. If only the current normalized fields are available, it can match:
 
 - `newAPIError.StatusCode == http.StatusForbidden`
 - `newAPIError.GetErrorCode() == "content_policy_violation"` or `newAPIError.ToOpenAIError().Type == "content_policy_violation"`
 - Gemini-specific fields captured in raw error metadata if added later
 
-If raw body access is added, do it centrally in `service.RelayErrorHandler` by attaching compact metadata to `types.NewAPIError`, not by parsing separately in every channel adaptor.
+Raw error metadata is required for reliable Gemini detection because the existing OpenAI-compatible normalization does not preserve Gemini's `error.status = "PERMISSION_DENIED"` field. Add this centrally in `service.RelayErrorHandler` by attaching compact fields to `types.NewAPIError`, not by parsing separately in every channel adaptor.
+
+Required small changes to existing new-api files:
+
+- `types/error.go`: add fields or metadata accessors for original upstream status code and compact upstream error details, for example type/code/status/message.
+- `service/error.go`: while reading the upstream error body, extract compact raw error fields and attach them to `NewAPIError`; also preserve the upstream HTTP status before any status-code mapping.
+- `dto/error.go` or a new risk parser helper: optionally add a small struct/helper for extracting `error.type`, `error.code`, `error.status`, and `error.message`.
+
+These changes are intentionally central and should avoid edits in provider-specific adaptor files.
 
 ## User Input Extraction
 
@@ -122,6 +132,8 @@ Recommended deployment:
 - Optional: MySQL if the existing database helper supports it with the same GORM model.
 
 PostgreSQL is the recommended default because this feature does frequent `user_id + created_at` range counts, pagination, and cleanup. Keep table fields portable and avoid JSONB-specific logic so the code remains easier to test against SQLite and possible to run on MySQL if needed.
+
+The audit database opener must not reuse `model.chooseDB` directly if that helper mutates global database type flags. The risk audit store needs its own opener or a refactored helper that returns a GORM connection without changing `common.UsingPostgreSQL`, `common.UsingSQLite`, `common.UsingMySQL`, or log DB type globals.
 
 Suggested tables:
 
@@ -182,12 +194,16 @@ Indexes:
 - `user_id`
 - `action`
 - `reason`
+- `operator_user_id`
+- `operator_type`
 - `window_start`
 - `window_end`
 - `event_count`
 - `created_at`
 
 Actions include `auto_ban`, `clear_user_events`, `clear_all_events`, and `clear_ban_records`. Clearing audit records must not re-enable or otherwise modify the actual new-api user.
+
+For system-created `auto_ban` actions, `operator_type` should be `system` and `operator_user_id` should be empty/zero. For external management API operations, record the authenticated admin/root user's ID and an operator type such as `admin` or `root`.
 
 ## Ban Behavior
 
@@ -205,6 +221,14 @@ Root users must not be auto-disabled. Admin users should either be excluded by d
 
 The disable operation should reuse the model layer rather than calling the HTTP admin endpoint from inside the process. A small helper such as `model.DisableUserById(id, reason)` can centralize DB update and cache invalidation.
 
+The disable operation must be idempotent. Update the main user row only when the user is currently enabled, and avoid writing duplicate `auto_ban` action rows for the same user and threshold window. The implementation can use a transaction, a user-level lock, or a uniqueness strategy keyed by user and active window to avoid duplicate auto-ban records under concurrent requests.
+
+Risk policy blocks should not trigger channel auto-ban. This can be achieved either by marking the matched error as non-channel-disabling before `processChannelError` evaluates it, or by running risk detection before channel auto-ban and skipping the channel disable path for matched content-risk events.
+
+Status-code mapping does not need a new core behavior change if operators avoid mapping upstream 403 policy blocks to another code in new-api. The risk management frontend should warn that mapping `403` away can prevent or confuse risk audit handling. The implementation should store the original upstream status in `upstream_status_code` before mapping so future mappings are safer.
+
+Similarly, new-api's channel auto-disable settings do not need a core restriction if operators keep `403` out of `AutomaticDisableStatusCodes`. The external risk management frontend should warn that adding `403` to channel auto-disable status codes can disable channels for user policy violations.
+
 ## Management API
 
 Expose APIs under a new admin/root-protected group, for example:
@@ -213,6 +237,7 @@ Expose APIs under a new admin/root-protected group, for example:
 - `PUT /api/risk_ban/settings`
 - `GET /api/risk_ban/events`
 - `GET /api/risk_ban/users/:id/events`
+- `GET /api/risk_ban/banned_users`
 - `GET /api/risk_ban/actions`
 - `DELETE /api/risk_ban/events`
 - `DELETE /api/risk_ban/users/:id/events`
@@ -268,9 +293,13 @@ Unit tests:
 - Match all four supported error shapes.
 - Reject non-403 responses.
 - Reject unrelated 403 errors.
+- Verify original upstream 403 is preserved when status-code mapping changes the client-facing status.
+- Verify a matched risk error is not retried and is counted at most once per request id.
+- Verify matched risk errors do not auto-disable channels.
 - Extract last user input from OpenAI Chat, Claude Messages, Gemini, Responses, and Images.
 - Verify truncation behavior.
 - Verify threshold counting within and outside the time window.
+- Verify concurrent threshold hits produce only one effective auto-ban action.
 
 Integration tests:
 
@@ -279,6 +308,7 @@ Integration tests:
 - Confirm user is disabled when threshold is reached.
 - Confirm root user is not disabled.
 - Confirm audit DB failure does not change relay response.
+- Confirm management clear actions record operator identity.
 
 Manual verification:
 
@@ -290,7 +320,6 @@ Manual verification:
 
 - Whether admin users should be auto-disabled or only root users are exempt.
 - Whether management reads use `AdminAuth` or `RootAuth`.
-- Whether the first version should parse raw upstream Gemini fields by attaching raw error metadata to `NewAPIError`, or rely on normalized error fields where possible.
 - Whether retention cleanup is included in the first implementation or deferred.
 
 ## Recommended Defaults
