@@ -50,12 +50,12 @@ Use an internal package named `risk` or `service/riskban` with these responsibil
 The relay integration should be a small call after an upstream error is available and before retry/channel-auto-ban decisions are made:
 
 ```go
-matchedRisk := riskban.ObserveRelayError(c, relayInfo, newAPIError)
+riskResult := riskban.ObserveRelayError(c, relayInfo, newAPIError)
 ```
 
-That hook should return quickly and must never change the client-facing response. If the audit database is unavailable, it logs the issue and skips the feature instead of failing user relay traffic.
+That hook should return quickly and must never change the client-facing response. It should separate detection from persistence: a response can be a matched risk block even when the audit database write fails.
 
-The hook may be called inside the retry loop, but it must be idempotent by request id. When `matchedRisk` is true, the relay loop should stop retrying and skip channel auto-disable handling for that error so one user request cannot be counted multiple times and cannot be retried onto another channel after a policy block.
+The hook may be called inside the retry loop, but it must be idempotent by request id. When `riskResult.Matched` is true, the relay loop should stop retrying and skip channel auto-disable handling for that error so one user request cannot be counted multiple times and cannot be retried onto another channel after a policy block. `riskResult.Recorded` only describes whether the audit event was persisted and counted.
 
 ## Detection Rules
 
@@ -114,9 +114,9 @@ Recommended deployment:
 
 - Default recommendation: PostgreSQL through `RISK_AUDIT_SQL_DSN`.
 - Development fallback: independent SQLite file only when explicitly configured.
-- Optional: MySQL if the existing database helper supports it with the same GORM model.
+- MySQL must remain supported by the GORM models and migrations for project compatibility, even if PostgreSQL is the recommended production deployment.
 
-PostgreSQL is the recommended default because this feature does frequent `user_id + created_at` range counts, pagination, and cleanup. Keep table fields portable and avoid JSONB-specific logic so the code remains easier to test against SQLite and possible to run on MySQL if needed.
+PostgreSQL is the recommended default because this feature does frequent `user_id + created_at` range counts, pagination, and cleanup. Keep table fields portable and avoid JSONB-specific logic so the code remains compatible with SQLite, MySQL, and PostgreSQL.
 
 The audit database opener must not reuse `model.chooseDB` directly if that helper mutates global database type flags. The risk audit store needs its own opener or a refactored helper that returns a GORM connection without changing `common.UsingPostgreSQL`, `common.UsingSQLite`, `common.UsingMySQL`, or log DB type globals.
 
@@ -143,7 +143,9 @@ There should be one active settings row. Defaults:
 - `input_max_chars = 12000`
 - `admin_api_enabled = true`
 
-The feature should not count any event while `block_message_prefix` is empty, even if `enabled = true`. The external management frontend should require or warn for a non-empty prefix before enabling automatic bans.
+The feature should not count any event while `block_message_prefix` is empty, even if `enabled = true`. The external management frontend should require or warn for a non-empty prefix before enabling automatic bans. Settings updates should validate `threshold >= 1`, `window_seconds > 0`, `input_max_chars > 0`, and trimmed `block_message_prefix != ""` when enabling the feature.
+
+`admin_api_enabled` controls whether non-root admins can read audit events/actions through `AdminAuth`. It must not disable root access to settings or destructive maintenance APIs, otherwise a misconfiguration could lock out management.
 
 ### `risk_ban_events`
 
@@ -153,6 +155,7 @@ The feature should not count any event while `block_message_prefix` is empty, ev
 - `channel_id`
 - `channel_type`
 - `request_id`
+- `dedupe_key`
 - `relay_format`
 - `relay_mode`
 - `model`
@@ -170,10 +173,13 @@ The feature should not count any event while `block_message_prefix` is empty, ev
 
 Indexes:
 
+- Unique `(user_id, dedupe_key)`
 - `(user_id, created_at)`
 - `(created_at)`
 - `(risk_hash)`
 - `(ban_triggered, created_at)`
+
+Set `dedupe_key` to the request id when it is present. If request id is empty, generate a unique event-local value so the unique index does not collapse unrelated events. In normal relay traffic, request id should be present and repeated observes for the same `(user_id, dedupe_key)` should update or return the existing event rather than creating duplicates. This avoids partial unique indexes and remains portable across SQLite, MySQL, and PostgreSQL.
 
 ### `risk_ban_actions`
 
@@ -201,7 +207,7 @@ When a matched event is recorded:
 3. Insert a `risk_ban_events` row.
 4. Count events for the same `user_id` where `created_at >= now - window_seconds`.
 5. If count is greater than or equal to `threshold`, disable the user in main new-api DB.
-6. Invalidate the user cache so the ban takes effect promptly.
+6. Invalidate both the user cache and all token caches for that user so the ban takes effect promptly.
 7. Insert a `risk_ban_actions` row with action `auto_ban`.
 
 Root users must not be auto-disabled. Admin users should either be excluded by default or controlled by a setting. The first implementation should exclude root users at minimum and log an action with a skipped reason if the threshold is met.
@@ -210,9 +216,9 @@ The disable operation should reuse the model layer rather than calling the HTTP 
 
 The disable operation must be idempotent. Update the main user row only when the user is currently enabled, and avoid writing duplicate `auto_ban` action rows for the same user and threshold window. The implementation can use a transaction, a user-level lock, or a uniqueness strategy keyed by user and active window to avoid duplicate auto-ban records under concurrent requests.
 
-Risk policy blocks should not trigger channel auto-ban. Run risk detection before `processChannelError`; if `matchedRisk` is true, record/count the event, stop retrying, and skip the channel disable path for that error.
+Risk policy blocks should not trigger channel auto-ban. Run risk detection before `processChannelError`; if `riskResult.Matched` is true, record/count the event when possible, stop retrying, and skip the channel disable path for that error.
 
-Status-code mapping does not need a new core behavior change if operators avoid mapping upstream 403 policy blocks to another code in new-api. This minimal design matches the observed `NewAPIError.StatusCode`; if channel status-code mapping changes 403 to another code before the risk hook runs, detection can be missed. The risk management frontend should warn that mapping `403` away can prevent risk audit handling.
+Status-code mapping does not need a new core behavior change if operators avoid mapping upstream 403 policy blocks to another code in new-api. This minimal design matches the observed `NewAPIError.StatusCode`; if channel status-code mapping changes 403 to another code before the risk hook runs, detection can be missed. Treat unmapped 403 as an enablement prerequisite: the risk management frontend should warn and refuse to mark the setup healthy when a channel maps `403` away.
 
 Similarly, new-api's channel auto-disable settings do not need a core restriction if operators keep `403` out of `AutomaticDisableStatusCodes`. The external risk management frontend should warn that adding `403` to channel auto-disable status codes can disable channels for user policy violations.
 
@@ -230,7 +236,7 @@ Expose APIs under a new admin/root-protected group, for example:
 - `DELETE /api/risk_ban/users/:id/events`
 - `DELETE /api/risk_ban/users/:id/actions`
 
-Authentication should use existing `RootAuth` or `AdminAuth`. Use `RootAuth` for settings changes and destructive global clear actions. `AdminAuth` is acceptable for read-only pages if that matches the deployment's trust model.
+Authentication should use existing `RootAuth` or `AdminAuth`. Use `RootAuth` for settings changes and destructive global clear actions. Use `AdminAuth` for read-only event/action/banned-user pages when `admin_api_enabled` is true; root users can always read them.
 
 The API returns data only for the external frontend. No routes or menu entries should be added to the built-in React frontend.
 
@@ -238,12 +244,12 @@ The API returns data only for the external frontend. No routes or menu entries s
 
 The audit hook must not affect normal relay behavior:
 
-- Audit DB unavailable: log and skip.
+- Audit DB unavailable: log the persistence failure, skip event counting and user auto-ban for that request, but still treat the response as `riskResult.Matched` for retry and channel-auto-ban control.
 - Input extraction fails: record the event with empty input and extraction error in internal logs.
 - User disable fails: record the event and log the failure.
 - Settings missing: create or use defaults.
 
-The client should still receive the original upstream-derived 403 response.
+Audit DB failure must not change the relay response and must not cause matched policy blocks to be retried or sent through channel auto-disable handling. The client should still receive the original upstream-derived 403 response.
 
 ## Privacy and Retention
 
@@ -283,6 +289,7 @@ Unit tests:
 - Reject 403 responses with a missing, empty, or non-matching prefix.
 - Parse a trailing `(hash: ...)` suffix from the message.
 - Verify a matched risk error is not retried and is counted at most once per request id.
+- Verify a matched risk error is not retried and does not auto-disable channels even when the audit DB write fails.
 - Verify matched risk errors do not auto-disable channels.
 - Extract last user input from OpenAI Chat, Claude Messages, Gemini, Responses, and Images.
 - Verify truncation behavior.
@@ -296,6 +303,7 @@ Integration tests:
 - Confirm user is disabled when threshold is reached.
 - Confirm root user is not disabled.
 - Confirm audit DB failure does not change relay response.
+- Confirm audit DB failure still stops retry/channel-auto-ban for a matched risk block.
 - Confirm management clear actions record operator identity.
 
 Manual verification:
@@ -307,7 +315,6 @@ Manual verification:
 ## Open Decisions
 
 - Whether admin users should be auto-disabled or only root users are exempt.
-- Whether management reads use `AdminAuth` or `RootAuth`.
 - Whether retention cleanup is included in the first implementation or deferred.
 
 ## Recommended Defaults
@@ -318,4 +325,4 @@ Manual verification:
 - Threshold: 3 events.
 - Input max length: 12000 Unicode characters.
 - Settings writes and destructive clears: root only.
-- Event/action reads: admin or root.
+- Event/action reads: root always; admins when `admin_api_enabled = true`.
