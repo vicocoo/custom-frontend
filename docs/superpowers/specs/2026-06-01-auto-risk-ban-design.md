@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add an optional automatic user ban workflow for upstream `sub2api` content-risk audit responses. When an upstream response is HTTP 403 and its normalized error message starts with a configured block-message prefix, new-api records the event in a dedicated audit database, counts recent events for that user within a configured time window, and disables the user in the main new-api database when the threshold is reached.
+Add an optional automatic user ban workflow for upstream `sub2api` content-risk audit responses. When the feature is enabled and an upstream response is HTTP 403 with a normalized error message that starts with a configured block-message prefix, new-api records the event in a dedicated audit database, counts recent events for that user within a configured time window, and disables the user in the main new-api database when the threshold is reached.
 
 The feature must keep the core relay flow easy to merge with upstream. The relay path should only call a small hook after an upstream error is normalized. Storage, matching, extraction, counting, and admin APIs live in an isolated package/module.
 
@@ -23,6 +23,7 @@ The feature must keep the core relay flow easy to merge with upstream. The relay
 - Do not store audit records in the main new-api database tables.
 - Do not remove or rename protected project or organization identifiers.
 - Do not treat every HTTP 403 as a risk event; only matched policy responses count.
+- Do not cover task-style relay paths such as Midjourney/task/video async submissions in the first implementation. The first scope is OpenAI Chat/Images/Responses, Anthropic Messages, and Gemini message-style requests.
 
 ## Existing Project Fit
 
@@ -40,7 +41,7 @@ The new feature should add one relay hook near the existing upstream-error handl
 
 Use an internal package named `risk` or `service/riskban` with these responsibilities:
 
-- `risk/config`: read/write feature settings from the audit database.
+- `risk/config`: read/write feature settings from the audit database and maintain an atomic in-memory settings snapshot for the relay hook.
 - `risk/store`: initialize and query the dedicated audit database.
 - `risk/detect`: match normalized upstream errors by status code and configured block-message prefix.
 - `risk/input`: extract the current/last user input from the cached original request.
@@ -55,12 +56,15 @@ riskResult := riskban.ObserveRelayError(c, relayInfo, newAPIError)
 
 That hook should return quickly and must never change the client-facing response. It should separate detection from persistence: a response can be a matched risk block even when the audit database write fails.
 
-The hook may be called inside the retry loop, but it must be idempotent by request id. When `riskResult.Matched` is true, the relay loop should stop retrying and skip channel auto-disable handling for that error so one user request cannot be counted multiple times and cannot be retried onto another channel after a policy block. `riskResult.Recorded` only describes whether the audit event was persisted and counted.
+The hook should first read the in-memory settings snapshot. If `enabled = false` or `block_message_prefix` is empty, it should return immediately without extracting request input, parsing hashes, querying the audit database, or touching user state. If the snapshot is missing because configuration has not loaded successfully, it should log that state and return without matching. This keeps the disabled feature to a single cheap in-memory check on relay errors.
+
+The hook may be called inside the retry loop, but it must be idempotent by request id. When `riskResult.Matched` is true, the relay loop should stop retrying and skip channel auto-disable handling for that error so one user request cannot be retried onto another channel after a policy block. `riskResult.Recorded` only describes whether a new audit event was persisted. Duplicate observes for the same request id should return the existing event and must not run threshold counting or auto-ban again.
 
 ## Detection Rules
 
 Only count a risk event when:
 
+- The cached settings snapshot has `enabled = true`.
 - The observed relay error status code is `403`.
 - `block_message_prefix` is configured and non-empty.
 - The normalized upstream error message starts with `block_message_prefix`.
@@ -95,7 +99,7 @@ Default stored data:
 - Request classification: request id, relay format/mode, model, and path.
 - Trigger evidence: extracted current/last user input, truncated to `input_max_chars`.
 - Detection evidence: observed 403 status code, matched block-message prefix, upstream message, and parsed hash if present.
-- Decision fields: created time, whether the event counted, and whether it triggered a ban.
+- Decision fields: created time and whether the event triggered a ban.
 
 Default omitted data:
 
@@ -120,6 +124,8 @@ PostgreSQL is the recommended default because this feature does frequent `user_i
 
 The audit database opener must not reuse `model.chooseDB` directly if that helper mutates global database type flags. The risk audit store needs its own opener or a refactored helper that returns a GORM connection without changing `common.UsingPostgreSQL`, `common.UsingSQLite`, `common.UsingMySQL`, or log DB type globals.
 
+Settings should be loaded into an atomic in-memory snapshot at startup, refreshed after every successful settings update, and optionally refreshed on a short background interval. The relay hook should use this snapshot for detection rather than querying the audit database on every blocked response. If the audit database is unavailable but a previous snapshot exists, detection can still match and stop retry/channel-auto-ban handling; persistence, counting, and user disabling are skipped until the audit database is available again. If no snapshot exists, the risk feature should fail closed as unavailable, log the configuration load failure, and avoid matching.
+
 Suggested tables:
 
 ### `risk_ban_settings`
@@ -143,9 +149,9 @@ There should be one active settings row. Defaults:
 - `input_max_chars = 12000`
 - `admin_api_enabled = true`
 
-The feature should not count any event while `block_message_prefix` is empty, even if `enabled = true`. The external management frontend should require or warn for a non-empty prefix before enabling automatic bans. Settings updates should validate `threshold >= 1`, `window_seconds > 0`, `input_max_chars > 0`, and trimmed `block_message_prefix != ""` when enabling the feature.
+The feature should not record or count any event while `block_message_prefix` is empty, even if `enabled = true`. The external management frontend should require or warn for a non-empty prefix before enabling automatic bans. Settings updates should validate `threshold >= 1`, `window_seconds > 0`, `input_max_chars > 0`, and trimmed `block_message_prefix != ""` when enabling the feature.
 
-`admin_api_enabled` controls whether non-root admins can read audit events/actions through `AdminAuth`. It must not disable root access to settings or destructive maintenance APIs, otherwise a misconfiguration could lock out management.
+`admin_api_enabled` controls whether non-root admins can read settings, audit events/actions, and auto-banned-user rows through `AdminAuth`. It must not disable root access to settings or destructive maintenance APIs, otherwise a misconfiguration could lock out management.
 
 ### `risk_ban_events`
 
@@ -168,7 +174,6 @@ The feature should not count any event while `block_message_prefix` is empty, ev
 - `error_message`
 - `risk_hash`
 - `created_at`
-- `counted`
 - `ban_triggered`
 
 Indexes:
@@ -180,6 +185,8 @@ Indexes:
 - `(ban_triggered, created_at)`
 
 Set `dedupe_key` to the request id when it is present. If request id is empty, generate a unique event-local value so the unique index does not collapse unrelated events. In normal relay traffic, request id should be present and repeated observes for the same `(user_id, dedupe_key)` should update or return the existing event rather than creating duplicates. This avoids partial unique indexes and remains portable across SQLite, MySQL, and PostgreSQL.
+
+Use bounded string sizes for indexed or frequently filtered fields so migrations remain portable, especially on MySQL with `utf8mb4`: `request_id` and `dedupe_key` should be at most 128 characters, `relay_format` and `relay_mode` at most 64 characters, `risk_hash` at most 191 characters, and `action` / `operator_type` at most 64 characters. `model` may use 191 or 255 characters depending on whether it is indexed. Large free-text fields such as `input_text` and `error_message` should remain text fields rather than indexed strings.
 
 ### `risk_ban_actions`
 
@@ -202,13 +209,14 @@ For system-created `auto_ban` actions, `operator_type` should be `system` and `o
 
 When a matched event is recorded:
 
-1. Load settings from the audit database.
-2. If disabled, return.
-3. Insert a `risk_ban_events` row.
-4. Count events for the same `user_id` where `created_at >= now - window_seconds`.
-5. If count is greater than or equal to `threshold`, disable the user in main new-api DB.
-6. Invalidate both the user cache and all token caches for that user so the ban takes effect promptly.
-7. Insert a `risk_ban_actions` row with action `auto_ban`.
+1. Read the current settings snapshot.
+2. If the feature is disabled or the prefix is empty, return before any database work.
+3. Insert a `risk_ban_events` row with the request id based `dedupe_key`.
+4. If the insert finds an existing `(user_id, dedupe_key)` row, return without counting or disabling again.
+5. Count persisted risk events for the same `user_id` where `created_at >= now - window_seconds`.
+6. If count is greater than or equal to `threshold`, disable the user in main new-api DB.
+7. Invalidate both the user cache and all token caches for that user so the ban takes effect promptly.
+8. Insert a `risk_ban_actions` row with action `auto_ban`.
 
 Root users must not be auto-disabled. Admin users should either be excluded by default or controlled by a setting. The first implementation should exclude root users at minimum and log an action with a skipped reason if the threshold is met.
 
@@ -238,13 +246,18 @@ Expose APIs under a new admin/root-protected group, for example:
 
 Authentication should use existing `RootAuth` or `AdminAuth`. Use `RootAuth` for settings changes and destructive global clear actions. Use `AdminAuth` for read-only event/action/banned-user pages when `admin_api_enabled` is true; root users can always read them.
 
+`GET /api/risk_ban/settings` is also a read-only API: root users can always read it, and non-root admins can read it when `admin_api_enabled = true`. `PUT /api/risk_ban/settings` remains root-only.
+
+`GET /api/risk_ban/banned_users` should return users who were auto-banned by this feature according to `risk_ban_actions.action = "auto_ban"`, enriched with the current main-database user status at read time. It should not be treated as a list of every disabled new-api user. If ban action records are cleared, this endpoint no longer has historical auto-ban rows to display, but clearing records must not re-enable the actual user.
+
 The API returns data only for the external frontend. No routes or menu entries should be added to the built-in React frontend.
 
 ## Error Handling
 
 The audit hook must not affect normal relay behavior:
 
-- Audit DB unavailable: log the persistence failure, skip event counting and user auto-ban for that request, but still treat the response as `riskResult.Matched` for retry and channel-auto-ban control.
+- Audit DB unavailable after a settings snapshot has already been loaded: use the cached snapshot for detection, log the persistence failure, skip event counting and user auto-ban for that request, but still treat the response as `riskResult.Matched` for retry and channel-auto-ban control.
+- Audit DB unavailable before any settings snapshot has been loaded: log the configuration failure and return `riskResult.Matched = false` because there is no trusted prefix to match.
 - Input extraction fails: record the event with empty input and extraction error in internal logs.
 - User disable fails: record the event and log the failure.
 - Settings missing: create or use defaults.
@@ -283,12 +296,14 @@ Keep upstream conflict risk low:
 
 Unit tests:
 
+- Verify disabled settings and empty prefix return before input extraction or audit DB writes.
 - Match HTTP 403 errors whose normalized message starts with the configured prefix.
 - Verify the same prefix works for normalized Anthropic / Claude Messages, OpenAI Chat / Images, OpenAI Responses, and Gemini error messages.
 - Reject non-403 responses.
 - Reject 403 responses with a missing, empty, or non-matching prefix.
 - Parse a trailing `(hash: ...)` suffix from the message.
-- Verify a matched risk error is not retried and is counted at most once per request id.
+- Verify a matched risk error is not retried and creates at most one event per request id.
+- Verify duplicate request id observes do not rerun threshold counting or auto-ban.
 - Verify a matched risk error is not retried and does not auto-disable channels even when the audit DB write fails.
 - Verify matched risk errors do not auto-disable channels.
 - Extract last user input from OpenAI Chat, Claude Messages, Gemini, Responses, and Images.
@@ -304,6 +319,7 @@ Integration tests:
 - Confirm root user is not disabled.
 - Confirm audit DB failure does not change relay response.
 - Confirm audit DB failure still stops retry/channel-auto-ban for a matched risk block.
+- Confirm unavailable settings with no cached snapshot disables risk matching and logs the configuration failure.
 - Confirm management clear actions record operator identity.
 
 Manual verification:
@@ -325,4 +341,4 @@ Manual verification:
 - Threshold: 3 events.
 - Input max length: 12000 Unicode characters.
 - Settings writes and destructive clears: root only.
-- Event/action reads: root always; admins when `admin_api_enabled = true`.
+- Settings/event/action/auto-banned-user reads: root always; admins when `admin_api_enabled = true`.
