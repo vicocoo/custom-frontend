@@ -23,6 +23,7 @@ import (
 	"github.com/QuantumNous/new-api/relay"
 	"github.com/QuantumNous/new-api/router"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/riskban"
 	_ "github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -46,6 +47,12 @@ var classicBuildFS embed.FS
 
 //go:embed web/classic/dist/index.html
 var classicIndexPage []byte
+
+//go:embed web/risk-ban/dist
+var riskBanBuildFS embed.FS
+
+//go:embed web/risk-ban/dist/index.html
+var riskBanIndexPage []byte
 
 func main() {
 	startTime := time.Now()
@@ -195,6 +202,8 @@ func main() {
 		DefaultIndexPage: indexPage,
 		ClassicBuildFS:   classicBuildFS,
 		ClassicIndexPage: classicIndexPage,
+		RiskBanBuildFS:   riskBanBuildFS,
+		RiskBanIndexPage: riskBanIndexPage,
 	})
 	var port = os.Getenv("PORT")
 	if port == "" {
@@ -299,6 +308,10 @@ func InitResources() error {
 	err = model.InitLogDB()
 	if err != nil {
 		return err
+	}
+
+	if err = riskban.InitFromEnv(); err != nil {
+		common.SysError("failed to initialize risk ban audit database: " + err.Error())
 	}
 
 	// Initialize Redis

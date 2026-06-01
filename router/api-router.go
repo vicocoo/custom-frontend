@@ -197,6 +197,28 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.POST("/waffo-pancake/subscription-product-options", controller.ListWaffoPancakeSubscriptionProductOptions)
 		}
 
+		riskBanRoute := apiRouter.Group("/risk_ban")
+		{
+			riskBanReadRoute := riskBanRoute.Group("/")
+			riskBanReadRoute.Use(middleware.AdminAuth())
+			{
+				riskBanReadRoute.GET("/settings", controller.GetRiskBanSettings)
+				riskBanReadRoute.GET("/events", controller.GetRiskBanEvents)
+				riskBanReadRoute.GET("/users/:id/events", controller.GetRiskBanUserEvents)
+				riskBanReadRoute.GET("/banned_users", controller.GetRiskBanBannedUsers)
+				riskBanReadRoute.GET("/actions", controller.GetRiskBanActions)
+				riskBanReadRoute.GET("/health", controller.GetRiskBanHealth)
+			}
+			riskBanRootRoute := riskBanRoute.Group("/")
+			riskBanRootRoute.Use(middleware.RootAuth())
+			{
+				riskBanRootRoute.PUT("/settings", controller.UpdateRiskBanSettings)
+				riskBanRootRoute.DELETE("/events", controller.DeleteRiskBanEvents)
+				riskBanRootRoute.DELETE("/users/:id/events", controller.DeleteRiskBanUserEvents)
+				riskBanRootRoute.DELETE("/users/:id/actions", controller.DeleteRiskBanUserActions)
+			}
+		}
+
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())

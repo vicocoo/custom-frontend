@@ -19,9 +19,11 @@ type ThemeAssets struct {
 	DefaultIndexPage []byte
 	ClassicBuildFS   embed.FS
 	ClassicIndexPage []byte
+	RiskBanBuildFS   embed.FS
+	RiskBanIndexPage []byte
 }
 
-func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
+func SetWebRouter(router *gin.Engine, assets ThemeAssets, noRouteHandlers ...optionalWebHandler) {
 	defaultFS := common.EmbedFolder(assets.DefaultBuildFS, "web/default/dist")
 	classicFS := common.EmbedFolder(assets.ClassicBuildFS, "web/classic/dist")
 	themeFS := common.NewThemeAwareFS(defaultFS, classicFS)
@@ -32,6 +34,11 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 	router.Use(static.Serve("/", themeFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
+		for _, handler := range noRouteHandlers {
+			if handler != nil && handler(c) {
+				return
+			}
+		}
 		if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
 			controller.RelayNotFound(c)
 			return

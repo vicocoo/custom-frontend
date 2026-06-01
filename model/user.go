@@ -320,6 +320,31 @@ func DeleteUserById(id int) (err error) {
 	return user.Delete()
 }
 
+func DisableUserById(id int, reason string) (bool, error) {
+	if id == 0 {
+		return false, errors.New("id 为空！")
+	}
+	result := DB.Model(&User{}).
+		Where("id = ? AND role <> ? AND status = ?", id, common.RoleRootUser, common.UserStatusEnabled).
+		Update("status", common.UserStatusDisabled)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return false, nil
+	}
+	if err := InvalidateUserCache(id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d after disable: %s", id, err.Error()))
+	}
+	if err := InvalidateUserTokensCache(id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d after disable: %s", id, err.Error()))
+	}
+	if reason != "" && LOG_DB != nil {
+		RecordLog(id, LogTypeManage, "自动封禁用户："+reason)
+	}
+	return true, nil
+}
+
 func HardDeleteUserById(id int) error {
 	if id == 0 {
 		return errors.New("id 为空！")
