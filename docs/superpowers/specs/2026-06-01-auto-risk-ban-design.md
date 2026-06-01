@@ -9,7 +9,7 @@ The feature must keep the core relay flow easy to merge with upstream. The relay
 ## Goals
 
 - Detect risk audit blocks returned by upstream `sub2api`.
-- Record the user, request time, endpoint/format, channel/token context, upstream error fields, and the relevant user input that triggered the event.
+- Record a minimal audit event: stable user/token/channel IDs, request time, endpoint/format, upstream error fields needed for verification, and the relevant user input that triggered the event.
 - Use an independent audit database for all risk records and feature configuration.
 - Disable the actual new-api user only when the configured threshold is met.
 - Provide backend APIs for an external management frontend to view settings, events, banned users, and clear audit records.
@@ -44,7 +44,7 @@ Use an internal package named `risk` or `service/riskban` with these responsibil
 - `risk/store`: initialize and query the dedicated audit database.
 - `risk/detect`: match normalized upstream errors against supported policy violation signatures.
 - `risk/input`: extract the current/last user input from the cached original request.
-- `risk/service`: record events, count recent events, and disable users when needed.
+- `risk/service`: record minimal events, count recent events, and disable users when needed.
 - `controller/riskban.go`: expose management APIs for the external frontend.
 
 The relay integration should be a single call after an upstream error is available:
@@ -88,7 +88,28 @@ Input rules:
 - OpenAI Responses: inspect `input`. If it is a string, store it. If it is an array, use the last item with role `user` or type `message` and role `user`; concatenate text/media input content.
 - Images: store `prompt` and add image-input markers for `image`, `images`, or multipart edit inputs. Do not persist raw uploaded image bytes.
 
-Stored input should have a configurable maximum length, defaulting to a conservative size such as 8 KiB. Truncated records should mark `input_truncated = true`.
+Stored input should have a configurable maximum length, defaulting to 12000 Unicode characters. Truncation must count Unicode code points, not bytes, and must preserve valid UTF-8. Truncated records should mark `input_truncated = true`.
+
+## Data Minimization
+
+The audit database should store only what is needed to prove and manage the auto-ban decision. It should not become a duplicate request log.
+
+Default stored data:
+
+- Stable identifiers: `user_id`, `token_id`, `channel_id`, and `channel_type`.
+- Request classification: request id, relay format/mode, model, and path.
+- Trigger evidence: extracted current/last user input, truncated to `input_max_chars`.
+- Detection evidence: upstream status code, matched error type/code/status, message, and parsed hash if present.
+- Decision fields: created time, whether the event counted, and whether it triggered a ban.
+
+Default omitted data:
+
+- Usernames, display names, emails, and OAuth identifiers.
+- Token names and token keys.
+- Channel names, upstream API keys, base URLs, and request headers.
+- Full raw request bodies, full raw upstream response bodies, uploaded image/audio/file bytes, and converted upstream requests.
+
+The management API can enrich responses with current user/channel/token display names from the main database when needed. That enrichment should be computed at read time and should not be copied into the audit database.
 
 ## Audit Database
 
@@ -96,11 +117,11 @@ Use a dedicated database connection separate from `model.DB` and `model.LOG_DB`.
 
 Recommended deployment:
 
-- Default: independent SQLite file for simple deployment.
-- Production: PostgreSQL through `RISK_AUDIT_SQL_DSN`.
+- Default recommendation: PostgreSQL through `RISK_AUDIT_SQL_DSN`.
+- Development fallback: independent SQLite file only when explicitly configured.
 - Optional: MySQL if the existing database helper supports it with the same GORM model.
 
-PostgreSQL is recommended for production because this feature does frequent `user_id + created_at` range counts, pagination, and cleanup. Keep table fields portable and avoid JSONB-specific logic.
+PostgreSQL is the recommended default because this feature does frequent `user_id + created_at` range counts, pagination, and cleanup. Keep table fields portable and avoid JSONB-specific logic so the code remains easier to test against SQLite and possible to run on MySQL if needed.
 
 Suggested tables:
 
@@ -120,19 +141,15 @@ There should be one active settings row. Defaults:
 - `enabled = false`
 - `window_seconds = 86400`
 - `threshold = 3`
-- `input_max_chars = 8192`
+- `input_max_chars = 12000`
 - `admin_api_enabled = true`
 
 ### `risk_ban_events`
 
 - `id`
 - `user_id`
-- `username`
-- `user_email`
 - `token_id`
-- `token_name`
 - `channel_id`
-- `channel_name`
 - `channel_type`
 - `request_id`
 - `relay_format`
@@ -140,6 +157,7 @@ There should be one active settings row. Defaults:
 - `model`
 - `request_path`
 - `input_text`
+- `input_char_count`
 - `input_truncated`
 - `upstream_status_code`
 - `error_type`
@@ -228,6 +246,7 @@ Recommended future settings:
 - retention days
 - input redaction patterns
 - hash-only mode
+- display-name enrichment toggle for management API responses
 
 These are future extensions, not required for the first implementation.
 
@@ -240,7 +259,7 @@ Keep upstream conflict risk low:
 - Avoid frontend changes.
 - Keep new files grouped in a risk-ban package and one controller/router addition.
 - Use GORM models and common JSON wrappers.
-- Keep SQL portable across SQLite, MySQL, and PostgreSQL.
+- Keep SQL portable across PostgreSQL, SQLite, and MySQL.
 
 ## Testing Plan
 
@@ -263,8 +282,8 @@ Integration tests:
 
 Manual verification:
 
-- Configure SQLite audit DB and trigger test events.
 - Configure PostgreSQL audit DB and verify pagination/counting.
+- Configure explicit SQLite development fallback and trigger test events.
 - Use external API calls to update settings, list events, and clear records.
 
 ## Open Decisions
@@ -276,10 +295,10 @@ Manual verification:
 
 ## Recommended Defaults
 
-- Audit DB: SQLite by default, PostgreSQL via `RISK_AUDIT_SQL_DSN` in production.
+- Audit DB: PostgreSQL via `RISK_AUDIT_SQL_DSN` by default recommendation; SQLite only as an explicit development fallback.
 - Feature enabled: false.
 - Window: 24 hours.
 - Threshold: 3 events.
-- Input max length: 8192 characters.
+- Input max length: 12000 Unicode characters.
 - Settings writes and destructive clears: root only.
 - Event/action reads: admin or root.
