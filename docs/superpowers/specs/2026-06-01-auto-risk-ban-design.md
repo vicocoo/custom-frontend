@@ -48,7 +48,7 @@ Use an internal package named `risk` or `service/riskban` with these responsibil
 - `risk/service`: record minimal events, count recent events, and disable users when needed.
 - `controller/riskban.go`: expose management APIs for the external frontend.
 
-The relay integration should be a small call after an upstream error is available and before retry/channel-auto-ban decisions are made:
+The relay integration should be a small call after an upstream error is available and after the existing channel-error handling has run, but before the retry decision is made:
 
 ```go
 riskResult := riskban.ObserveRelayError(c, relayInfo, newAPIError)
@@ -58,7 +58,7 @@ That hook should return quickly and must never change the client-facing response
 
 The hook should first read the in-memory settings snapshot. If `enabled = false` or `block_message_prefix` is empty, it should return immediately without extracting request input, parsing hashes, querying the audit database, or touching user state. If the snapshot is missing because configuration has not loaded successfully, it should log that state and return without matching. This keeps the disabled feature to a single cheap in-memory check on relay errors.
 
-The hook may be called inside the retry loop, but it must be idempotent by request id. When `riskResult.Matched` is true, the relay loop should stop retrying and skip channel auto-disable handling for that error so one user request cannot be retried onto another channel after a policy block. `riskResult.Recorded` only describes whether a new audit event was persisted. Duplicate observes for the same request id should return the existing event and must not run threshold counting or auto-ban again.
+The hook may be called inside the retry loop, but it must be idempotent by request id. When `riskResult.Matched` is true, the relay loop should stop retrying so one user request cannot be retried onto another channel after a policy block. `riskResult.Recorded` only describes whether a new audit event was persisted. Duplicate observes for the same request id should return the existing event and must not run threshold counting or auto-ban again.
 
 ## Detection Rules
 
@@ -124,7 +124,7 @@ PostgreSQL is the recommended default because this feature does frequent `user_i
 
 The audit database opener must not reuse `model.chooseDB` directly if that helper mutates global database type flags. The risk audit store needs its own opener or a refactored helper that returns a GORM connection without changing `common.UsingPostgreSQL`, `common.UsingSQLite`, `common.UsingMySQL`, or log DB type globals.
 
-Settings should be loaded into an atomic in-memory snapshot at startup, refreshed after every successful settings update, and optionally refreshed on a short background interval. The relay hook should use this snapshot for detection rather than querying the audit database on every blocked response. If the audit database is unavailable but a previous snapshot exists, detection can still match and stop retry/channel-auto-ban handling; persistence, counting, and user disabling are skipped until the audit database is available again. If no snapshot exists, the risk feature should fail closed as unavailable, log the configuration load failure, and avoid matching.
+Settings should be loaded into an atomic in-memory snapshot at startup, refreshed after every successful settings update, and optionally refreshed on a short background interval. The relay hook should use this snapshot for detection rather than querying the audit database on every blocked response. If the audit database is unavailable but a previous snapshot exists, detection can still match and stop retry handling; persistence, counting, and user disabling are skipped until the audit database is available again. If no snapshot exists, the risk feature should fail closed as unavailable, log the configuration load failure, and avoid matching.
 
 Suggested tables:
 
@@ -224,11 +224,11 @@ The disable operation should reuse the model layer rather than calling the HTTP 
 
 The disable operation must be idempotent. Update the main user row only when the user is currently enabled, and avoid writing duplicate `auto_ban` action rows for the same user and threshold window. The implementation can use a transaction, a user-level lock, or a uniqueness strategy keyed by user and active window to avoid duplicate auto-ban records under concurrent requests.
 
-Risk policy blocks should not trigger channel auto-ban. Run risk detection before `processChannelError`; if `riskResult.Matched` is true, record/count the event when possible, stop retrying, and skip the channel disable path for that error.
+The risk-ban feature should not actively modify, suppress, or take ownership of new-api's existing channel auto-disable behavior. Keep the current `processChannelError` path in place, then run risk detection before the retry decision. If `riskResult.Matched` is true, record/count the event when possible and stop retrying. This avoids repeated risk counts across channels while leaving channel auto-disable behavior governed only by existing new-api settings.
 
 Status-code mapping does not need a new core behavior change if operators avoid mapping upstream 403 policy blocks to another code in new-api. This minimal design matches the observed `NewAPIError.StatusCode`; if channel status-code mapping changes 403 to another code before the risk hook runs, detection can be missed. Treat unmapped 403 as an enablement prerequisite: the risk management frontend should warn and refuse to mark the setup healthy when a channel maps `403` away.
 
-Similarly, new-api's channel auto-disable settings do not need a core restriction if operators keep `403` out of `AutomaticDisableStatusCodes`. The external risk management frontend should warn that adding `403` to channel auto-disable status codes can disable channels for user policy violations.
+Similarly, new-api's channel auto-disable settings do not need a core restriction if operators keep `403` out of `AutomaticDisableStatusCodes`. The external risk management frontend should warn that adding `403` to channel auto-disable status codes can disable channels for user policy violations. The risk-ban hook itself should not override that setting.
 
 ## Management API
 
@@ -256,13 +256,13 @@ The API returns data only for the external frontend. No routes or menu entries s
 
 The audit hook must not affect normal relay behavior:
 
-- Audit DB unavailable after a settings snapshot has already been loaded: use the cached snapshot for detection, log the persistence failure, skip event counting and user auto-ban for that request, but still treat the response as `riskResult.Matched` for retry and channel-auto-ban control.
+- Audit DB unavailable after a settings snapshot has already been loaded: use the cached snapshot for detection, log the persistence failure, skip event counting and user auto-ban for that request, but still treat the response as `riskResult.Matched` for retry control.
 - Audit DB unavailable before any settings snapshot has been loaded: log the configuration failure and return `riskResult.Matched = false` because there is no trusted prefix to match.
 - Input extraction fails: record the event with empty input and extraction error in internal logs.
 - User disable fails: record the event and log the failure.
 - Settings missing: create or use defaults.
 
-Audit DB failure must not change the relay response and must not cause matched policy blocks to be retried or sent through channel auto-disable handling. The client should still receive the original upstream-derived 403 response.
+Audit DB failure must not change the relay response and must not cause matched policy blocks to be retried. The client should still receive the original upstream-derived 403 response.
 
 ## Privacy and Retention
 
@@ -285,7 +285,7 @@ These are future extensions, not required for the first implementation.
 
 Keep upstream conflict risk low:
 
-- Add one small hook in `controller.Relay` or `processChannelError`.
+- Add one small hook in `controller.Relay` after the existing `processChannelError` call and before retry handling.
 - Avoid edits inside provider-specific adaptors.
 - Avoid frontend changes.
 - Keep new files grouped in a risk-ban package and one controller/router addition.
@@ -304,8 +304,8 @@ Unit tests:
 - Parse a trailing `(hash: ...)` suffix from the message.
 - Verify a matched risk error is not retried and creates at most one event per request id.
 - Verify duplicate request id observes do not rerun threshold counting or auto-ban.
-- Verify a matched risk error is not retried and does not auto-disable channels even when the audit DB write fails.
-- Verify matched risk errors do not auto-disable channels.
+- Verify a matched risk error is not retried even when the audit DB write fails.
+- Verify matched risk errors do not change existing channel auto-disable settings or bypass `processChannelError`.
 - Extract last user input from OpenAI Chat, Claude Messages, Gemini, Responses, and Images.
 - Verify truncation behavior.
 - Verify threshold counting within and outside the time window.
@@ -318,7 +318,7 @@ Integration tests:
 - Confirm user is disabled when threshold is reached.
 - Confirm root user is not disabled.
 - Confirm audit DB failure does not change relay response.
-- Confirm audit DB failure still stops retry/channel-auto-ban for a matched risk block.
+- Confirm audit DB failure still stops retry for a matched risk block.
 - Confirm unavailable settings with no cached snapshot disables risk matching and logs the configuration failure.
 - Confirm management clear actions record operator identity.
 
