@@ -28,7 +28,9 @@ plans
 
 electron/node_modules
 electron/dist
-data/
+data/*
+!data/model-metadata-overrides.json
+!data/model-metadata-overrides.example.json
 .gomodcache/
 .gocache-temp
 .gopath

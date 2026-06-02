@@ -36,6 +36,14 @@ type Pricing struct {
 	BillingMode            string                  `json:"billing_mode,omitempty"`
 	BillingExpr            string                  `json:"billing_expr,omitempty"`
 	PricingVersion         string                  `json:"pricing_version,omitempty"`
+	ContextLength          *int64                  `json:"context_length,omitempty"`
+	MaxOutputTokens        *int64                  `json:"max_output_tokens,omitempty"`
+	KnowledgeCutoff        string                  `json:"knowledge_cutoff,omitempty"`
+	ReleaseDate            string                  `json:"release_date,omitempty"`
+	ParameterCount         string                  `json:"parameter_count,omitempty"`
+	InputModalities        []string                `json:"input_modalities,omitempty"`
+	OutputModalities       []string                `json:"output_modalities,omitempty"`
+	Capabilities           []string                `json:"capabilities,omitempty"`
 }
 
 type PricingVendor struct {
@@ -286,6 +294,7 @@ func updatePricing() {
 	}
 
 	pricingMap = make([]Pricing, 0)
+	metadataOverrides := loadModelMetadataOverrides()
 	for model, groups := range modelGroupsMap {
 		pricing := Pricing{
 			ModelName:              model,
@@ -337,6 +346,7 @@ func updatePricing() {
 				pricing.BillingExpr = expr
 			}
 		}
+		applyModelMetadataOverride(&pricing, metadataOverrides)
 		pricingMap = append(pricingMap, pricing)
 	}
 
