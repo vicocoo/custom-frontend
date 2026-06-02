@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
+import { useStatus } from '@/hooks/use-status'
 import { LmFrame } from '@/components/lm/frame'
 import { LmTag, type LmTagVariant } from '@/components/lm/tag'
 import { LmTerminal } from '@/components/lm/terminal'
@@ -47,8 +48,38 @@ function HeroTerminal() {
 }
 
 export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const { status } = useStatus()
   const starfieldRef = useRef<HTMLDivElement>(null)
+  const docsUrl =
+    (status?.docs_link as string | undefined) || '/'
   useStarfield(starfieldRef)
+
+  const renderDocsButton = () => {
+    const content = (
+      <>
+        查看接入文档 <span className="lm-text-muted">→</span>
+      </>
+    )
+
+    if (docsUrl.startsWith('http')) {
+      return (
+        <a
+          href={docsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="lm-btn lm-btn-lg"
+        >
+          {content}
+        </a>
+      )
+    }
+
+    return (
+      <Link to={docsUrl} className="lm-btn lm-btn-lg">
+        {content}
+      </Link>
+    )
+  }
 
   return (
     <section className="lm-section lm-hero-section" style={{ paddingTop: 80, paddingBottom: 120, minHeight: '100vh', display: 'flex', alignItems: 'center', position: 'relative' }}>
@@ -82,9 +113,7 @@ export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
               <Link to={isAuthenticated ? '/dashboard' : '/sign-up'} className="lm-btn lm-btn-primary lm-btn-lg">
                 <span style={{ fontFamily: 'var(--font-mono)' }}>$</span> 立即开始使用
               </Link>
-              <Link to="/" className="lm-btn lm-btn-lg">
-                查看接入文档 <span className="lm-text-muted">→</span>
-              </Link>
+              {renderDocsButton()}
             </div>
 
             {/* Mini stat strip */}
