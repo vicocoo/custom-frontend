@@ -13,15 +13,16 @@ const (
 )
 
 type Settings struct {
-	ID                 uint   `json:"id" gorm:"primaryKey"`
-	Enabled            bool   `json:"enabled" gorm:"default:false"`
-	WindowSeconds      int64  `json:"window_seconds" gorm:"default:86400"`
-	Threshold          int    `json:"threshold" gorm:"default:3"`
-	BlockMessagePrefix string `json:"block_message_prefix" gorm:"type:text"`
-	InputMaxChars      int    `json:"input_max_chars" gorm:"default:12000"`
-	AdminAPIEnabled    bool   `json:"admin_api_enabled" gorm:"default:true"`
-	CreatedAt          int64  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt          int64  `json:"updated_at" gorm:"autoUpdateTime"`
+	ID                   uint     `json:"id" gorm:"primaryKey"`
+	Enabled              bool     `json:"enabled" gorm:"default:false"`
+	WindowSeconds        int64    `json:"window_seconds" gorm:"default:86400"`
+	Threshold            int      `json:"threshold" gorm:"default:3"`
+	BlockMessagePrefix   string   `json:"block_message_prefix" gorm:"type:text"`
+	BlockMessagePrefixes []string `json:"block_message_prefixes,omitempty" gorm:"-"`
+	InputMaxChars        int      `json:"input_max_chars" gorm:"default:12000"`
+	AdminAPIEnabled      bool     `json:"admin_api_enabled" gorm:"default:true"`
+	CreatedAt            int64    `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt            int64    `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (Settings) TableName() string {
@@ -73,9 +74,10 @@ func (Action) TableName() string {
 }
 
 type Detection struct {
-	Matched  bool
-	Message  string
-	RiskHash string
+	Matched       bool
+	Message       string
+	MatchedPrefix string
+	RiskHash      string
 }
 
 type ExtractedInput struct {
@@ -94,16 +96,32 @@ type ObserveResult struct {
 }
 
 type EventQuery struct {
-	UserID int
-	Offset int
-	Limit  int
+	UserID    int
+	StartTime int64
+	EndTime   int64
+	Offset    int
+	Limit     int
 }
 
 type ActionQuery struct {
-	UserID int
-	Action string
-	Offset int
-	Limit  int
+	UserID    int
+	Action    string
+	StartTime int64
+	EndTime   int64
+	Offset    int
+	Limit     int
+}
+
+type EventClearQuery struct {
+	UserID    int
+	StartTime int64
+	EndTime   int64
+}
+
+type ActionClearQuery struct {
+	UserID    int
+	StartTime int64
+	EndTime   int64
 }
 
 type BannedUser struct {

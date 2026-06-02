@@ -31,6 +31,34 @@ func TestDetectRiskErrorMatchesConfigured403PrefixAndHash(t *testing.T) {
 	if result.RiskHash != "abc123" {
 		t.Fatalf("expected hash abc123, got %q", result.RiskHash)
 	}
+	if result.MatchedPrefix != "risk audit blocked" {
+		t.Fatalf("expected matched prefix to be recorded, got %q", result.MatchedPrefix)
+	}
+}
+
+func TestDetectRiskErrorMatchesAnyConfiguredPrefix(t *testing.T) {
+	settings := Settings{
+		Enabled: true,
+		BlockMessagePrefix: `
+			first blocker
+			second blocker
+			first blocker
+		`,
+	}
+	err := types.NewOpenAIError(
+		errors.New("second blocker: unsafe prompt"),
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusForbidden,
+	)
+
+	result := DetectRiskError(err, settings)
+
+	if !result.Matched {
+		t.Fatalf("expected risk error to match one configured prefix")
+	}
+	if result.MatchedPrefix != "second blocker" {
+		t.Fatalf("expected second blocker to be matched, got %q", result.MatchedPrefix)
+	}
 }
 
 func TestDetectRiskErrorRejectsDisabledEmptyPrefixAndNon403(t *testing.T) {

@@ -38,8 +38,38 @@ func normalizeSettings(settings Settings) Settings {
 	if settings.InputMaxChars <= 0 {
 		settings.InputMaxChars = defaults.InputMaxChars
 	}
-	settings.BlockMessagePrefix = strings.TrimSpace(settings.BlockMessagePrefix)
+	prefixes := normalizePrefixes(append(splitPrefixes(settings.BlockMessagePrefix), settings.BlockMessagePrefixes...))
+	settings.BlockMessagePrefixes = prefixes
+	settings.BlockMessagePrefix = strings.Join(prefixes, "\n")
 	return settings
+}
+
+func splitPrefixes(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return strings.Split(value, "\n")
+}
+
+func normalizePrefixes(values []string) []string {
+	prefixes := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		prefix := strings.TrimSpace(value)
+		if prefix == "" {
+			continue
+		}
+		if _, ok := seen[prefix]; ok {
+			continue
+		}
+		seen[prefix] = struct{}{}
+		prefixes = append(prefixes, prefix)
+	}
+	return prefixes
+}
+
+func messagePrefixes(settings Settings) []string {
+	return normalizeSettings(settings).BlockMessagePrefixes
 }
 
 func ValidateSettings(settings Settings) error {
@@ -52,7 +82,7 @@ func ValidateSettings(settings Settings) error {
 	if settings.InputMaxChars <= 0 {
 		return fmt.Errorf("input_max_chars must be > 0")
 	}
-	if settings.Enabled && strings.TrimSpace(settings.BlockMessagePrefix) == "" {
+	if settings.Enabled && len(messagePrefixes(settings)) == 0 {
 		return fmt.Errorf("block_message_prefix is required when enabled")
 	}
 	return nil

@@ -103,7 +103,7 @@ func buildEvent(c *gin.Context, info *relaycommon.RelayInfo, err *types.NewAPIEr
 		RequestID:      limitString(requestID, 128),
 		DedupeKey:      limitString(dedupeKey, 128),
 		StatusCode:     err.StatusCode,
-		MatchedPrefix:  settings.BlockMessagePrefix,
+		MatchedPrefix:  detection.MatchedPrefix,
 		ErrorMessage:   detection.Message,
 		RiskHash:       limitString(detection.RiskHash, 191),
 		InputText:      input.Text,

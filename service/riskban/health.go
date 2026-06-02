@@ -27,7 +27,7 @@ func GetHealth() HealthStatus {
 			Code:    "settings_snapshot_missing",
 			Message: "risk-ban settings snapshot is not loaded",
 		})
-	} else if settings.BlockMessagePrefix == "" {
+	} else if len(messagePrefixes(settings)) == 0 {
 		status.Warnings = append(status.Warnings, HealthWarning{
 			Code:    "empty_block_message_prefix",
 			Message: "block_message_prefix is empty; risk-ban matching is disabled",

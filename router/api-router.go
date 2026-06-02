@@ -214,6 +214,7 @@ func SetApiRouter(router *gin.Engine) {
 			{
 				riskBanRootRoute.PUT("/settings", controller.UpdateRiskBanSettings)
 				riskBanRootRoute.DELETE("/events", controller.DeleteRiskBanEvents)
+				riskBanRootRoute.DELETE("/actions", controller.DeleteRiskBanActions)
 				riskBanRootRoute.DELETE("/users/:id/events", controller.DeleteRiskBanUserEvents)
 				riskBanRootRoute.DELETE("/users/:id/actions", controller.DeleteRiskBanUserActions)
 			}

@@ -250,9 +250,7 @@ func ListEvents(query EventQuery) ([]Event, int64, error) {
 	}
 	limit := normalizeLimit(query.Limit)
 	db := store.db.Model(&Event{})
-	if query.UserID > 0 {
-		db = db.Where("user_id = ?", query.UserID)
-	}
+	db = applyEventFilters(db, query.UserID, query.StartTime, query.EndTime)
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -269,9 +267,7 @@ func ListActions(query ActionQuery) ([]Action, int64, error) {
 	}
 	limit := normalizeLimit(query.Limit)
 	db := store.db.Model(&Action{})
-	if query.UserID > 0 {
-		db = db.Where("user_id = ?", query.UserID)
-	}
+	db = applyActionFilters(db, query.UserID, query.StartTime, query.EndTime)
 	if query.Action != "" {
 		db = db.Where("action = ?", query.Action)
 	}
@@ -312,55 +308,120 @@ func ListBannedUsers(offset int, limit int) ([]BannedUser, int64, error) {
 	return users, total, nil
 }
 
-func ClearEvents(userID int, operatorID int, operatorType string) (int64, error) {
+func ClearEvents(clear EventClearQuery, operatorID int, operatorType string) (int64, error) {
 	store := getStore()
 	if store == nil || store.db == nil {
 		return 0, fmt.Errorf("risk audit store is unavailable")
 	}
-	query := store.db.Model(&Event{})
 	actionName := ActionClearAllEvents
-	if userID > 0 {
-		query = query.Where("user_id = ?", userID)
+	if clear.UserID > 0 {
 		actionName = ActionClearUserEvents
 	}
-	result := query.Delete(&Event{})
+	db := applyEventFilters(store.db.Model(&Event{}), clear.UserID, clear.StartTime, clear.EndTime)
+	if !hasEventClearFilters(clear) {
+		db = db.Where("1 = 1")
+	}
+	result := db.Delete(&Event{})
 	if result.Error != nil {
 		return 0, result.Error
 	}
 	action := &Action{
-		UserID:         userID,
+		UserID:         clear.UserID,
 		Action:         actionName,
-		Reason:         "clear risk ban audit events",
+		Reason:         clearReason("clear risk ban audit events", clear.StartTime, clear.EndTime),
 		OperatorUserID: operatorID,
 		OperatorType:   operatorType,
 		EventCount:     int(result.RowsAffected),
-		WindowStart:    0,
-		WindowEnd:      time.Now().Unix(),
+		WindowStart:    clear.StartTime,
+		WindowEnd:      clearEndTime(clear.EndTime),
 	}
 	_, err := store.InsertActionIfMissing(action)
 	return result.RowsAffected, err
 }
 
 func ClearUserActions(userID int, operatorID int, operatorType string) (int64, error) {
+	return ClearActions(ActionClearQuery{UserID: userID}, operatorID, operatorType)
+}
+
+func ClearActions(clear ActionClearQuery, operatorID int, operatorType string) (int64, error) {
 	store := getStore()
 	if store == nil || store.db == nil {
 		return 0, fmt.Errorf("risk audit store is unavailable")
 	}
-	result := store.db.Where("user_id = ?", userID).Delete(&Action{})
+	db := applyActionFilters(store.db.Model(&Action{}), clear.UserID, clear.StartTime, clear.EndTime)
+	if !hasActionClearFilters(clear) {
+		db = db.Where("1 = 1")
+	}
+	result := db.Delete(&Action{})
 	if result.Error != nil {
 		return 0, result.Error
 	}
 	action := &Action{
-		UserID:         userID,
+		UserID:         clear.UserID,
 		Action:         ActionClearBanRecords,
-		Reason:         "clear risk ban action records",
+		Reason:         clearReason("clear risk ban action records", clear.StartTime, clear.EndTime),
 		OperatorUserID: operatorID,
 		OperatorType:   operatorType,
 		EventCount:     int(result.RowsAffected),
-		WindowEnd:      time.Now().Unix(),
+		WindowStart:    clear.StartTime,
+		WindowEnd:      clearEndTime(clear.EndTime),
 	}
 	_, err := store.InsertActionIfMissing(action)
 	return result.RowsAffected, err
+}
+
+func applyEventFilters(db *gorm.DB, userID int, startTime int64, endTime int64) *gorm.DB {
+	if userID > 0 {
+		db = db.Where("user_id = ?", userID)
+	}
+	if startTime > 0 {
+		db = db.Where("created_at >= ?", startTime)
+	}
+	if endTime > 0 {
+		db = db.Where("created_at <= ?", endTime)
+	}
+	return db
+}
+
+func applyActionFilters(db *gorm.DB, userID int, startTime int64, endTime int64) *gorm.DB {
+	if userID > 0 {
+		db = db.Where("user_id = ?", userID)
+	}
+	if startTime > 0 {
+		db = db.Where("created_at >= ?", startTime)
+	}
+	if endTime > 0 {
+		db = db.Where("created_at <= ?", endTime)
+	}
+	return db
+}
+
+func hasEventClearFilters(clear EventClearQuery) bool {
+	return clear.UserID > 0 || clear.StartTime > 0 || clear.EndTime > 0
+}
+
+func hasActionClearFilters(clear ActionClearQuery) bool {
+	return clear.UserID > 0 || clear.StartTime > 0 || clear.EndTime > 0
+}
+
+func clearReason(base string, startTime int64, endTime int64) string {
+	switch {
+	case startTime > 0 && endTime > 0:
+		return fmt.Sprintf("%s from %d to %d", base, startTime, endTime)
+	case startTime > 0:
+		return fmt.Sprintf("%s from %d", base, startTime)
+	case endTime > 0:
+		return fmt.Sprintf("%s until %d", base, endTime)
+	default:
+		return base
+	}
+}
+
+func clearEndTime(endTime int64) int64 {
+	if endTime > 0 {
+		return endTime
+	}
+	return time.Now().Unix()
 }
 
 func normalizeLimit(limit int) int {

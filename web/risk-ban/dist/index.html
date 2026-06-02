@@ -7,27 +7,47 @@
   <style>
     :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { margin: 0; background: #f6f7f9; color: #17191c; }
-    main { max-width: 1120px; margin: 0 auto; padding: 28px 20px; }
+    main { max-width: 1180px; margin: 0 auto; padding: 28px 20px; }
     header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 20px; }
     h1 { font-size: 24px; margin: 0; letter-spacing: 0; }
+    h2 { font-size: 16px; margin: 0; }
     section { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-    h2 { font-size: 16px; margin: 0 0 12px; }
     label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
-    input, textarea { width: 100%; box-sizing: border-box; border: 1px solid #cbd3dc; border-radius: 6px; padding: 9px 10px; font: inherit; background: #fff; color: inherit; }
+    input, textarea, select { width: 100%; box-sizing: border-box; border: 1px solid #cbd3dc; border-radius: 6px; padding: 9px 10px; font: inherit; background: #fff; color: inherit; }
     input[type="checkbox"] { width: auto; }
-    button { border: 1px solid #1d4ed8; background: #2563eb; color: #fff; border-radius: 6px; padding: 8px 12px; font: inherit; cursor: pointer; }
+    button { border: 1px solid #1d4ed8; background: #2563eb; color: #fff; border-radius: 6px; padding: 8px 12px; font: inherit; cursor: pointer; white-space: nowrap; }
     button.secondary { background: #fff; color: #1f2937; border-color: #cbd3dc; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    pre { overflow: auto; background: #111827; color: #f9fafb; padding: 12px; border-radius: 6px; max-height: 360px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    button.danger { background: #dc2626; border-color: #b91c1c; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+    pre { overflow: auto; background: #111827; color: #f9fafb; padding: 12px; border-radius: 6px; max-height: 420px; white-space: pre-wrap; word-break: break-word; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
     th, td { border-bottom: 1px solid #e5e7eb; padding: 8px; text-align: left; vertical-align: top; }
+    th { color: #475467; font-weight: 700; }
+    dialog { width: min(860px, calc(100vw - 32px)); border: 1px solid #dfe3e8; border-radius: 8px; padding: 0; color: inherit; background: #fff; }
+    dialog::backdrop { background: rgba(15, 23, 42, .45); }
+    .dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #e5e7eb; }
+    .dialog-body { padding: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; margin: 12px 0; }
+    .toolbar label { margin-top: 0; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .table-wrap { overflow-x: auto; }
     .muted { color: #667085; }
     .warn { color: #9a3412; }
+    .error { color: #b91c1c; }
+    .preview { display: block; max-height: 3.9em; overflow: hidden; overflow-wrap: anywhere; color: #344054; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+    .pager { justify-content: flex-end; margin-top: 10px; }
+    .status { min-height: 20px; }
+    .compact { width: 1%; }
     @media (prefers-color-scheme: dark) {
       body { background: #0f1115; color: #f2f4f7; }
-      section { background: #171a21; border-color: #303846; }
-      input, textarea, button.secondary { background: #111827; color: #f2f4f7; border-color: #3d4656; }
+      section, dialog { background: #171a21; border-color: #303846; }
+      input, textarea, select, button.secondary { background: #111827; color: #f2f4f7; border-color: #3d4656; }
+      th, .muted { color: #aab4c4; }
+      th, td, .dialog-head { border-color: #303846; }
+      .preview { color: #d0d5dd; }
     }
   </style>
 </head>
@@ -51,50 +71,205 @@
           <div><label>Threshold</label><input id="threshold" type="number" min="1"></div>
           <div><label>Input max chars</label><input id="input_max_chars" type="number" min="1"></div>
         </div>
-        <label>Block message prefix</label>
-        <textarea id="block_message_prefix" rows="2"></textarea>
-        <p class="row"><button type="submit">Save</button><span id="save-status" class="muted"></span></p>
+        <label>Block message prefixes</label>
+        <textarea id="block_message_prefix" rows="4" placeholder="One prefix per line"></textarea>
+        <p class="row"><button type="submit">Save</button><span id="save-status" class="muted status"></span></p>
       </form>
     </section>
 
     <section>
-      <h2>Health</h2>
+      <div class="section-head">
+        <h2>Health</h2>
+        <button class="secondary" onclick="loadHealth()">Refresh</button>
+      </div>
       <pre id="health">Loading...</pre>
     </section>
 
     <section>
-      <h2>Recent Events</h2>
+      <div class="section-head">
+        <h2>Recent Events</h2>
+        <button class="secondary" onclick="loadEvents()">Refresh</button>
+      </div>
+      <div class="toolbar">
+        <div><label>User ID</label><input id="events-user-id" type="number" min="1" placeholder="Any"></div>
+        <div><label>Start time</label><input id="events-start-time" type="datetime-local"></div>
+        <div><label>End time</label><input id="events-end-time" type="datetime-local"></div>
+        <div class="row">
+          <button onclick="applyFilters('events')">Apply</button>
+          <button class="secondary" onclick="resetFilters('events')">Reset</button>
+          <button class="danger" onclick="deleteEvents()">Delete Matching</button>
+        </div>
+      </div>
       <div id="events"></div>
+      <div id="events-pager" class="row pager"></div>
     </section>
 
     <section>
-      <h2>Auto-Banned Users</h2>
+      <div class="section-head">
+        <h2>Auto-Banned Users</h2>
+        <button class="secondary" onclick="loadBannedUsers()">Refresh</button>
+      </div>
       <div id="banned-users"></div>
+      <div id="banned-pager" class="row pager"></div>
     </section>
 
     <section>
-      <h2>Actions</h2>
+      <div class="section-head">
+        <h2>Actions</h2>
+        <button class="secondary" onclick="loadActions()">Refresh</button>
+      </div>
+      <div class="toolbar">
+        <div><label>User ID</label><input id="actions-user-id" type="number" min="1" placeholder="Any"></div>
+        <div><label>Start time</label><input id="actions-start-time" type="datetime-local"></div>
+        <div><label>End time</label><input id="actions-end-time" type="datetime-local"></div>
+        <div class="row">
+          <button onclick="applyFilters('actions')">Apply</button>
+          <button class="secondary" onclick="resetFilters('actions')">Reset</button>
+          <button class="danger" onclick="deleteActions()">Delete Matching</button>
+        </div>
+      </div>
       <div id="actions"></div>
+      <div id="actions-pager" class="row pager"></div>
     </section>
   </main>
+
+  <dialog id="details-dialog">
+    <div class="dialog-head">
+      <strong id="details-title">Details</strong>
+      <button class="secondary" onclick="closeDetails()">Close</button>
+    </div>
+    <div class="dialog-body">
+      <pre id="details-body"></pre>
+    </div>
+  </dialog>
+
   <script>
     const uid = localStorage.getItem('uid')
     const headers = () => uid ? {'New-Api-User': uid, 'Content-Type': 'application/json'} : {'Content-Type': 'application/json'}
+    const state = {
+      events: {p: 1, page_size: 20, user_id: '', start_time: '', end_time: '', page: null},
+      banned: {p: 1, page_size: 20, page: null},
+      actions: {p: 1, page_size: 20, user_id: '', start_time: '', end_time: '', page: null}
+    }
+
     async function api(path, opts = {}) {
-      const res = await fetch(path, { credentials: 'include', ...opts, headers: {...headers(), ...(opts.headers || {})} })
+      const res = await fetch(path, {credentials: 'include', ...opts, headers: {...headers(), ...(opts.headers || {})}})
       const data = await res.json()
       if (!data.success) throw new Error(data.message || 'Request failed')
       return data.data
     }
+
     function esc(value) {
       return String(value ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]))
     }
+
+    function formatTime(value) {
+      return value ? new Date(value * 1000).toLocaleString() : ''
+    }
+
+    function preview(value, length = 140) {
+      const text = String(value ?? '')
+      return text.length > length ? text.slice(0, length) + '...' : text
+    }
+
+    function toUnix(value) {
+      if (!value) return ''
+      const time = new Date(value).getTime()
+      return Number.isNaN(time) ? '' : String(Math.floor(time / 1000))
+    }
+
+    function query(params) {
+      const values = new URLSearchParams()
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') values.set(key, value)
+      })
+      return values.toString()
+    }
+
     function table(items, columns) {
       if (!items || items.length === 0) return '<div class="muted">No records</div>'
-      return '<table><thead><tr>' + columns.map(c => '<th>' + esc(c.label) + '</th>').join('') + '</tr></thead><tbody>' +
-        items.map(item => '<tr>' + columns.map(c => '<td>' + esc(c.value(item)) + '</td>').join('') + '</tr>').join('') +
-        '</tbody></table>'
+      return '<div class="table-wrap"><table><thead><tr>' + columns.map(c => '<th' + (c.compact ? ' class="compact"' : '') + '>' + esc(c.label) + '</th>').join('') + '</tr></thead><tbody>' +
+        items.map(item => '<tr>' + columns.map(c => '<td>' + c.value(item) + '</td>').join('') + '</tr>').join('') +
+        '</tbody></table></div>'
     }
+
+    function renderPager(key, loader) {
+      const tableState = state[key]
+      const page = tableState.page || {page: tableState.p, page_size: tableState.page_size, total: 0}
+      const totalPages = Math.max(1, Math.ceil((page.total || 0) / (page.page_size || tableState.page_size)))
+      document.getElementById(key + '-pager').innerHTML = [
+        '<span class="muted">Total ' + esc(page.total || 0) + ' · Page ' + esc(page.page || tableState.p) + ' / ' + esc(totalPages) + '</span>',
+        '<button class="secondary" ' + ((page.page || 1) <= 1 ? 'disabled' : '') + ' onclick="pageTable(\'' + key + '\', -1)">Prev</button>',
+        '<button class="secondary" ' + ((page.page || 1) >= totalPages ? 'disabled' : '') + ' onclick="pageTable(\'' + key + '\', 1)">Next</button>'
+      ].join('')
+      tableState.loader = loader
+    }
+
+    async function pageTable(key, delta) {
+      state[key].p = Math.max(1, state[key].p + delta)
+      await state[key].loader()
+    }
+
+    function syncFilters(key) {
+      state[key].user_id = document.getElementById(key + '-user-id').value.trim()
+      state[key].start_time = toUnix(document.getElementById(key + '-start-time').value)
+      state[key].end_time = toUnix(document.getElementById(key + '-end-time').value)
+    }
+
+    function applyFilters(key) {
+      syncFilters(key)
+      state[key].p = 1
+      return state[key].loader()
+    }
+
+    function resetFilters(key) {
+      document.getElementById(key + '-user-id').value = ''
+      document.getElementById(key + '-start-time').value = ''
+      document.getElementById(key + '-end-time').value = ''
+      state[key].user_id = ''
+      state[key].start_time = ''
+      state[key].end_time = ''
+      state[key].p = 1
+      return state[key].loader()
+    }
+
+    function filteredParams(key) {
+      const tableState = state[key]
+      return {
+        p: tableState.p,
+        page_size: tableState.page_size,
+        user_id: tableState.user_id,
+        start_time: tableState.start_time,
+        end_time: tableState.end_time
+      }
+    }
+
+    function readableRecord(item) {
+      return {
+        ...item,
+        created_at_text: formatTime(item.created_at),
+        updated_at_text: formatTime(item.updated_at),
+        banned_at_text: formatTime(item.banned_at),
+        window_start_text: formatTime(item.window_start),
+        window_end_text: formatTime(item.window_end)
+      }
+    }
+
+    function showDetails(title, item) {
+      document.getElementById('details-title').textContent = title
+      document.getElementById('details-body').textContent = JSON.stringify(readableRecord(item), null, 2)
+      document.getElementById('details-dialog').showModal()
+    }
+
+    function closeDetails() {
+      document.getElementById('details-dialog').close()
+    }
+
+    function confirmDelete(label) {
+      if (!confirm(label + '\n\nThis cannot be undone. Continue?')) return false
+      return confirm('Confirm again: ' + label)
+    }
+
     async function loadSettings() {
       const data = await api('/api/risk_ban/settings')
       const s = data.settings
@@ -105,6 +280,7 @@
       document.getElementById('input_max_chars').value = s.input_max_chars
       document.getElementById('block_message_prefix').value = s.block_message_prefix || ''
     }
+
     async function saveSettings(event) {
       event.preventDefault()
       const status = document.getElementById('save-status')
@@ -120,54 +296,94 @@
       try {
         await api('/api/risk_ban/settings', {method: 'PUT', body: JSON.stringify(payload)})
         status.textContent = 'Saved'
-        await loadAll()
+        await Promise.all([loadSettings(), loadHealth()])
       } catch (err) {
         status.textContent = err.message
       }
     }
+
     async function loadHealth() {
       const health = await api('/api/risk_ban/health')
-      document.getElementById('health').textContent = JSON.stringify(health, null, 2)
-      if (health.warnings?.length) document.getElementById('health').className = 'warn'
+      const node = document.getElementById('health')
+      node.textContent = JSON.stringify(health, null, 2)
+      node.className = health.warnings?.length ? 'warn' : ''
     }
+
     async function loadEvents() {
-      const page = await api('/api/risk_ban/events?page_size=20')
+      const page = await api('/api/risk_ban/events?' + query(filteredParams('events')))
+      state.events.page = page
       document.getElementById('events').innerHTML = table(page.items, [
-        {label:'ID', value:x=>x.id},
-        {label:'User', value:x=>x.user_id},
-        {label:'Channel', value:x=>x.channel_id},
-        {label:'Model', value:x=>x.model},
-        {label:'Hash', value:x=>x.risk_hash},
-        {label:'Input', value:x=>x.input_text},
-        {label:'Created', value:x=>new Date((x.created_at || 0) * 1000).toLocaleString()}
+        {label:'ID', compact: true, value:x=>esc(x.id)},
+        {label:'User', value:x=>esc(x.user_id)},
+        {label:'Channel', value:x=>esc(x.channel_id)},
+        {label:'Model', value:x=>esc(x.model)},
+        {label:'Matched Prefix', value:x=>'<span class="preview mono">' + esc(x.matched_prefix) + '</span>'},
+        {label:'Input', value:x=>'<span class="preview">' + esc(preview(x.input_text)) + '</span>'},
+        {label:'Created', value:x=>esc(formatTime(x.created_at))},
+        {label:'', compact: true, value:x=>'<button class="secondary" onclick=\'showDetails("Event #' + esc(x.id) + '", ' + esc(JSON.stringify(x)) + ')\'>Details</button>'}
       ])
+      renderPager('events', loadEvents)
     }
+
     async function loadBannedUsers() {
-      const page = await api('/api/risk_ban/banned_users?page_size=20')
+      const page = await api('/api/risk_ban/banned_users?' + query({p: state.banned.p, page_size: state.banned.page_size}))
+      state.banned.page = page
       document.getElementById('banned-users').innerHTML = table(page.items, [
-        {label:'User', value:x=>x.username || x.user_id},
-        {label:'Status', value:x=>x.status},
-        {label:'Events', value:x=>x.event_count},
-        {label:'Banned at', value:x=>new Date((x.banned_at || 0) * 1000).toLocaleString()}
+        {label:'User', value:x=>esc(x.username || x.user_id)},
+        {label:'User ID', value:x=>esc(x.user_id)},
+        {label:'Status', value:x=>esc(x.status)},
+        {label:'Events', value:x=>esc(x.event_count)},
+        {label:'Banned at', value:x=>esc(formatTime(x.banned_at))},
+        {label:'', compact: true, value:x=>'<button class="secondary" onclick=\'showDetails("Banned User #' + esc(x.user_id) + '", ' + esc(JSON.stringify(x)) + ')\'>Details</button>'}
       ])
+      renderPager('banned', loadBannedUsers)
     }
+
     async function loadActions() {
-      const page = await api('/api/risk_ban/actions?page_size=20')
+      const page = await api('/api/risk_ban/actions?' + query(filteredParams('actions')))
+      state.actions.page = page
       document.getElementById('actions').innerHTML = table(page.items, [
-        {label:'ID', value:x=>x.id},
-        {label:'User', value:x=>x.user_id},
-        {label:'Action', value:x=>x.action},
-        {label:'Reason', value:x=>x.reason},
-        {label:'Events', value:x=>x.event_count},
-        {label:'Created', value:x=>new Date((x.created_at || 0) * 1000).toLocaleString()}
+        {label:'ID', compact: true, value:x=>esc(x.id)},
+        {label:'User', value:x=>esc(x.user_id)},
+        {label:'Action', value:x=>esc(x.action)},
+        {label:'Reason', value:x=>'<span class="preview">' + esc(preview(x.reason)) + '</span>'},
+        {label:'Events', value:x=>esc(x.event_count)},
+        {label:'Created', value:x=>esc(formatTime(x.created_at))},
+        {label:'', compact: true, value:x=>'<button class="secondary" onclick=\'showDetails("Action #' + esc(x.id) + '", ' + esc(JSON.stringify(x)) + ')\'>Details</button>'}
       ])
+      renderPager('actions', loadActions)
     }
+
+    async function deleteEvents() {
+      syncFilters('events')
+      const label = 'Delete matching risk events'
+      if (!confirmDelete(label)) return
+      const data = await api('/api/risk_ban/events?' + query(filteredParams('events')), {method: 'DELETE'})
+      alert('Deleted ' + data.deleted + ' event(s).')
+      state.events.p = 1
+      await Promise.all([loadEvents(), loadActions(), loadBannedUsers()])
+    }
+
+    async function deleteActions() {
+      syncFilters('actions')
+      const label = 'Delete matching action logs'
+      if (!confirmDelete(label)) return
+      const data = await api('/api/risk_ban/actions?' + query(filteredParams('actions')), {method: 'DELETE'})
+      alert('Deleted ' + data.deleted + ' action log(s).')
+      state.actions.p = 1
+      await loadActions()
+    }
+
     async function loadAll() {
-      await Promise.all([loadSettings(), loadHealth(), loadEvents(), loadBannedUsers(), loadActions()].map(p => p.catch(err => {
+      try {
+        await Promise.all([loadSettings(), loadHealth(), loadEvents(), loadBannedUsers(), loadActions()])
+      } catch (err) {
         console.error(err)
         document.getElementById('health').textContent = err.message
-      })))
+        document.getElementById('health').className = 'error'
+      }
     }
+
     loadAll()
   </script>
 </body>

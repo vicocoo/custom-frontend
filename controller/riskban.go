@@ -56,11 +56,12 @@ func GetRiskBanEvents(c *gin.Context) {
 		return
 	}
 	pageInfo := common.GetPageQuery(c)
-	userID, _ := strconv.Atoi(c.Query("user_id"))
 	events, total, err := riskban.ListEvents(riskban.EventQuery{
-		UserID: userID,
-		Offset: pageInfo.GetStartIdx(),
-		Limit:  pageInfo.GetPageSize(),
+		UserID:    riskBanQueryInt(c, "user_id"),
+		StartTime: riskBanQueryInt64(c, "start_time"),
+		EndTime:   riskBanQueryInt64(c, "end_time"),
+		Offset:    pageInfo.GetStartIdx(),
+		Limit:     pageInfo.GetPageSize(),
 	})
 	if err != nil {
 		common.ApiError(c, err)
@@ -83,9 +84,11 @@ func GetRiskBanUserEvents(c *gin.Context) {
 	}
 	pageInfo := common.GetPageQuery(c)
 	events, total, err := riskban.ListEvents(riskban.EventQuery{
-		UserID: userID,
-		Offset: pageInfo.GetStartIdx(),
-		Limit:  pageInfo.GetPageSize(),
+		UserID:    userID,
+		StartTime: riskBanQueryInt64(c, "start_time"),
+		EndTime:   riskBanQueryInt64(c, "end_time"),
+		Offset:    pageInfo.GetStartIdx(),
+		Limit:     pageInfo.GetPageSize(),
 	})
 	if err != nil {
 		common.ApiError(c, err)
@@ -118,12 +121,13 @@ func GetRiskBanActions(c *gin.Context) {
 		return
 	}
 	pageInfo := common.GetPageQuery(c)
-	userID, _ := strconv.Atoi(c.Query("user_id"))
 	actions, total, err := riskban.ListActions(riskban.ActionQuery{
-		UserID: userID,
-		Action: c.Query("action"),
-		Offset: pageInfo.GetStartIdx(),
-		Limit:  pageInfo.GetPageSize(),
+		UserID:    riskBanQueryInt(c, "user_id"),
+		Action:    c.Query("action"),
+		StartTime: riskBanQueryInt64(c, "start_time"),
+		EndTime:   riskBanQueryInt64(c, "end_time"),
+		Offset:    pageInfo.GetStartIdx(),
+		Limit:     pageInfo.GetPageSize(),
 	})
 	if err != nil {
 		common.ApiError(c, err)
@@ -143,7 +147,11 @@ func GetRiskBanHealth(c *gin.Context) {
 }
 
 func DeleteRiskBanEvents(c *gin.Context) {
-	count, err := riskban.ClearEvents(0, c.GetInt("id"), RiskBanOperatorType(c))
+	count, err := riskban.ClearEvents(riskban.EventClearQuery{
+		UserID:    riskBanQueryInt(c, "user_id"),
+		StartTime: riskBanQueryInt64(c, "start_time"),
+		EndTime:   riskBanQueryInt64(c, "end_time"),
+	}, c.GetInt("id"), RiskBanOperatorType(c))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -157,7 +165,24 @@ func DeleteRiskBanUserEvents(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	count, err := riskban.ClearEvents(userID, c.GetInt("id"), RiskBanOperatorType(c))
+	count, err := riskban.ClearEvents(riskban.EventClearQuery{
+		UserID:    userID,
+		StartTime: riskBanQueryInt64(c, "start_time"),
+		EndTime:   riskBanQueryInt64(c, "end_time"),
+	}, c.GetInt("id"), RiskBanOperatorType(c))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"deleted": count})
+}
+
+func DeleteRiskBanActions(c *gin.Context) {
+	count, err := riskban.ClearActions(riskban.ActionClearQuery{
+		UserID:    riskBanQueryInt(c, "user_id"),
+		StartTime: riskBanQueryInt64(c, "start_time"),
+		EndTime:   riskBanQueryInt64(c, "end_time"),
+	}, c.GetInt("id"), RiskBanOperatorType(c))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -171,7 +196,11 @@ func DeleteRiskBanUserActions(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	count, err := riskban.ClearUserActions(userID, c.GetInt("id"), RiskBanOperatorType(c))
+	count, err := riskban.ClearActions(riskban.ActionClearQuery{
+		UserID:    userID,
+		StartTime: riskBanQueryInt64(c, "start_time"),
+		EndTime:   riskBanQueryInt64(c, "end_time"),
+	}, c.GetInt("id"), RiskBanOperatorType(c))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -185,4 +214,20 @@ type riskBanForbiddenError struct{}
 
 func (e *riskBanForbiddenError) Error() string {
 	return "risk-ban admin API is disabled for non-root admins"
+}
+
+func riskBanQueryInt(c *gin.Context, key string) int {
+	value, err := strconv.Atoi(c.Query(key))
+	if err != nil || value < 0 {
+		return 0
+	}
+	return value
+}
+
+func riskBanQueryInt64(c *gin.Context, key string) int64 {
+	value, err := strconv.ParseInt(c.Query(key), 10, 64)
+	if err != nil || value < 0 {
+		return 0
+	}
+	return value
 }

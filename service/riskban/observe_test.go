@@ -129,6 +129,13 @@ func TestObserveRelayErrorDedupesRequestAndDisablesUserAtThreshold(t *testing.T)
 	if user.Status != common.UserStatusDisabled {
 		t.Fatalf("expected user disabled at threshold, got status %d", user.Status)
 	}
+	events, _, err := ListEvents(EventQuery{UserID: 1, Limit: 10})
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(events) == 0 || events[0].MatchedPrefix != "risk audit blocked" {
+		t.Fatalf("expected event to store matched prefix, got %+v", events)
+	}
 }
 
 func TestObserveRelayErrorDoesNotDisableRootUser(t *testing.T) {
@@ -162,5 +169,131 @@ func TestObserveRelayErrorDoesNotDisableRootUser(t *testing.T) {
 	}
 	if time.Unix(actions[0].CreatedAt, 0).IsZero() {
 		t.Fatalf("expected action timestamp")
+	}
+}
+
+func TestRiskBanStoreFiltersAndClearsByTimeRange(t *testing.T) {
+	setupRiskBanTestDB(t)
+	store := getStore()
+	if store == nil {
+		t.Fatalf("expected test store")
+	}
+	for _, event := range []Event{
+		{UserID: 1, DedupeKey: "old", CreatedAt: 100},
+		{UserID: 1, DedupeKey: "mid", CreatedAt: 200},
+		{UserID: 2, DedupeKey: "new", CreatedAt: 300},
+	} {
+		if _, _, err := store.InsertEvent(&event); err != nil {
+			t.Fatalf("insert event: %v", err)
+		}
+	}
+	for _, action := range []Action{
+		{UserID: 1, Action: ActionAutoBan, WindowStart: 90, WindowEnd: 100, CreatedAt: 100},
+		{UserID: 1, Action: ActionAutoBan, WindowStart: 190, WindowEnd: 200, CreatedAt: 200},
+		{UserID: 2, Action: ActionAutoBan, WindowStart: 290, WindowEnd: 300, CreatedAt: 300},
+	} {
+		if _, err := store.InsertActionIfMissing(&action); err != nil {
+			t.Fatalf("insert action: %v", err)
+		}
+	}
+
+	events, total, err := ListEvents(EventQuery{UserID: 1, StartTime: 150, EndTime: 250, Limit: 10})
+	if err != nil {
+		t.Fatalf("list filtered events: %v", err)
+	}
+	if total != 1 || len(events) != 1 || events[0].DedupeKey != "mid" {
+		t.Fatalf("expected only mid event, total=%d events=%+v", total, events)
+	}
+
+	actions, total, err := ListActions(ActionQuery{UserID: 1, StartTime: 150, EndTime: 250, Limit: 10})
+	if err != nil {
+		t.Fatalf("list filtered actions: %v", err)
+	}
+	if total != 1 || len(actions) != 1 || actions[0].CreatedAt != 200 {
+		t.Fatalf("expected only mid action, total=%d actions=%+v", total, actions)
+	}
+
+	deleted, err := ClearEvents(EventClearQuery{UserID: 1, StartTime: 150, EndTime: 250}, 99, OperatorRoot)
+	if err != nil {
+		t.Fatalf("clear events: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected one event deleted, got %d", deleted)
+	}
+	events, total, err = ListEvents(EventQuery{UserID: 1, Limit: 10})
+	if err != nil {
+		t.Fatalf("list remaining events: %v", err)
+	}
+	if total != 1 || len(events) != 1 || events[0].DedupeKey != "old" {
+		t.Fatalf("expected only old user event left, total=%d events=%+v", total, events)
+	}
+
+	deleted, err = ClearActions(ActionClearQuery{UserID: 1, StartTime: 150, EndTime: 250}, 99, OperatorRoot)
+	if err != nil {
+		t.Fatalf("clear actions: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected one action deleted, got %d", deleted)
+	}
+	actions, total, err = ListActions(ActionQuery{UserID: 1, Action: ActionAutoBan, Limit: 10})
+	if err != nil {
+		t.Fatalf("list remaining actions: %v", err)
+	}
+	if total != 1 || len(actions) != 1 || actions[0].CreatedAt != 100 {
+		t.Fatalf("expected only old user action left, total=%d actions=%+v", total, actions)
+	}
+}
+
+func TestRiskBanStoreClearsAllWithoutFilters(t *testing.T) {
+	setupRiskBanTestDB(t)
+	store := getStore()
+	if store == nil {
+		t.Fatalf("expected test store")
+	}
+	for _, event := range []Event{
+		{UserID: 1, DedupeKey: "first", CreatedAt: 100},
+		{UserID: 2, DedupeKey: "second", CreatedAt: 200},
+	} {
+		if _, _, err := store.InsertEvent(&event); err != nil {
+			t.Fatalf("insert event: %v", err)
+		}
+	}
+	for _, action := range []Action{
+		{UserID: 1, Action: ActionAutoBan, WindowStart: 90, WindowEnd: 100, CreatedAt: 100},
+		{UserID: 2, Action: ActionAutoBan, WindowStart: 190, WindowEnd: 200, CreatedAt: 200},
+	} {
+		if _, err := store.InsertActionIfMissing(&action); err != nil {
+			t.Fatalf("insert action: %v", err)
+		}
+	}
+
+	deletedEvents, err := ClearEvents(EventClearQuery{}, 99, OperatorRoot)
+	if err != nil {
+		t.Fatalf("clear all events: %v", err)
+	}
+	if deletedEvents != 2 {
+		t.Fatalf("expected two events deleted, got %d", deletedEvents)
+	}
+	_, total, err := ListEvents(EventQuery{Limit: 10})
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if total != 0 {
+		t.Fatalf("expected no events left, got %d", total)
+	}
+
+	deletedActions, err := ClearActions(ActionClearQuery{}, 99, OperatorRoot)
+	if err != nil {
+		t.Fatalf("clear all actions: %v", err)
+	}
+	if deletedActions != 3 {
+		t.Fatalf("expected three action rows deleted including event clear audit action, got %d", deletedActions)
+	}
+	actions, total, err := ListActions(ActionQuery{Limit: 10})
+	if err != nil {
+		t.Fatalf("list actions: %v", err)
+	}
+	if total != 1 || len(actions) != 1 || actions[0].Action != ActionClearBanRecords {
+		t.Fatalf("expected only action clear audit record left, total=%d actions=%+v", total, actions)
 	}
 }

@@ -11,7 +11,7 @@ var riskHashSuffixRE = regexp.MustCompile(`\s*\(hash:\s*([^)]+?)\s*\)\s*$`)
 
 func DetectRiskError(err *types.NewAPIError, settings Settings) Detection {
 	settings = normalizeSettings(settings)
-	if err == nil || !settings.Enabled || settings.BlockMessagePrefix == "" {
+	if err == nil || !settings.Enabled || len(settings.BlockMessagePrefixes) == 0 {
 		return Detection{}
 	}
 	if err.StatusCode != 403 {
@@ -21,14 +21,21 @@ func DetectRiskError(err *types.NewAPIError, settings Settings) Detection {
 	if message == "" {
 		message = strings.TrimSpace(err.ToOpenAIError().Message)
 	}
-	if message == "" || !strings.HasPrefix(message, settings.BlockMessagePrefix) {
+	if message == "" {
 		return Detection{}
 	}
-	return Detection{
-		Matched:  true,
-		Message:  message,
-		RiskHash: parseRiskHash(message),
+	for _, prefix := range settings.BlockMessagePrefixes {
+		if !strings.HasPrefix(message, prefix) {
+			continue
+		}
+		return Detection{
+			Matched:       true,
+			Message:       message,
+			MatchedPrefix: prefix,
+			RiskHash:      parseRiskHash(message),
+		}
 	}
+	return Detection{}
 }
 
 func parseRiskHash(message string) string {
