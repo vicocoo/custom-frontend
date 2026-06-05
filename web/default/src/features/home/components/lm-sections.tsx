@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useStatus } from '@/hooks/use-status'
 import { LmFrame } from '@/components/lm/frame'
@@ -6,35 +6,110 @@ import { LmTag, type LmTagVariant } from '@/components/lm/tag'
 import { LmTerminal } from '@/components/lm/terminal'
 import { useStreamLines, type StreamLine } from '@/components/lm/use-stream-lines'
 import { useStarfield } from '@/components/lm/use-starfield'
+import {
+  buildChatCompletionsUrl,
+  getConfiguredServerAddress,
+} from './home-api-url'
 
 /* ───────── HERO ───────── */
 
-const terminalDemoLines: StreamLine[] = [
-  { parts: [{ text: '$ ', cls: 'lm-term-prompt' }, { text: 'curl ', cls: 'lm-term-fn' }, { text: 'https://api.gcgcode.cc/v1/chat/completions \\', cls: 'lm-term-string' }] },
-  { parts: [{ text: '   -H ' }, { text: '"Content-Type: application/json" \\', cls: 'lm-term-string' }] },
-  { parts: [{ text: '   -H ' }, { text: '"Authorization: Bearer sk-', cls: 'lm-term-string' }, { text: '0xA1F3...', cls: 'lm-term-key' }, { text: '" \\', cls: 'lm-term-string' }] },
-  { parts: [{ text: '   -d ' }, { text: '\'{"model":"gpt-4","messages":[{"role":"user","content":"你好"}]}\'', cls: 'lm-term-string' }] },
-  { html: '<span class="lm-term-line"><span class="lm-term-comment">// 智能路由 → us-west-1 · 延迟 178ms</span></span>' },
-  { parts: [{ text: '{', cls: 'lm-term-out' }] },
-  { parts: [{ text: '  "id": ', cls: 'lm-term-out' }, { text: '"chatcmpl-A1F3x7"', cls: 'lm-term-string' }, { text: ',', cls: 'lm-term-out' }] },
-  { parts: [{ text: '  "object": ', cls: 'lm-term-out' }, { text: '"chat.completion"', cls: 'lm-term-string' }, { text: ',', cls: 'lm-term-out' }] },
-  { parts: [{ text: '  "choices": [', cls: 'lm-term-out' }] },
-  { parts: [{ text: '    {', cls: 'lm-term-out' }] },
-  { parts: [{ text: '      "message": {', cls: 'lm-term-out' }] },
-  { parts: [{ text: '        "role": ', cls: 'lm-term-out' }, { text: '"assistant"', cls: 'lm-term-string' }, { text: ',', cls: 'lm-term-out' }] },
-  { parts: [{ text: '        "content": ', cls: 'lm-term-out' }, { text: '"你好！我是 AI 助手，很高兴为你服务。有什么我可以帮助你的吗？"', cls: 'lm-term-string' }] },
-  { parts: [{ text: '      }', cls: 'lm-term-out' }] },
-  { parts: [{ text: '    }', cls: 'lm-term-out' }] },
-  { parts: [{ text: '  ],', cls: 'lm-term-out' }] },
-  { parts: [{ text: '  "usage": {', cls: 'lm-term-out' }] },
-  { parts: [{ text: '    "prompt_tokens": ', cls: 'lm-term-out' }, { text: '8', cls: 'lm-term-kw' }, { text: ', "completion_tokens": ', cls: 'lm-term-out' }, { text: '23', cls: 'lm-term-kw' }, { text: ', "total_tokens": ', cls: 'lm-term-out' }, { text: '31', cls: 'lm-term-kw' }] },
-  { parts: [{ text: '  }', cls: 'lm-term-out' }] },
-  { parts: [{ text: '}', cls: 'lm-term-out' }] },
-  { html: '<span class="lm-term-line"><span class="lm-term-comment">// 计费: ¥0.0042 · 响应时间: 1.2s</span></span>' },
-]
+function getTerminalDemoLines(chatCompletionsUrl: string): StreamLine[] {
+  return [
+    {
+      parts: [
+        { text: '$ ', cls: 'lm-term-prompt' },
+        { text: 'curl ', cls: 'lm-term-fn' },
+        { text: `${chatCompletionsUrl} \\`, cls: 'lm-term-string' },
+      ],
+    },
+    {
+      parts: [
+        { text: '   -H ' },
+        { text: '"Content-Type: application/json" \\', cls: 'lm-term-string' },
+      ],
+    },
+    {
+      parts: [
+        { text: '   -H ' },
+        { text: '"Authorization: Bearer sk-', cls: 'lm-term-string' },
+        { text: '0xA1F3...', cls: 'lm-term-key' },
+        { text: '" \\', cls: 'lm-term-string' },
+      ],
+    },
+    {
+      parts: [
+        { text: '   -d ' },
+        {
+          text: '\'{"model":"gpt-4","messages":[{"role":"user","content":"你好"}]}\'',
+          cls: 'lm-term-string',
+        },
+      ],
+    },
+    {
+      html: '<span class="lm-term-line"><span class="lm-term-comment">// 智能路由 → us-west-1 · 延迟 178ms</span></span>',
+    },
+    { parts: [{ text: '{', cls: 'lm-term-out' }] },
+    {
+      parts: [
+        { text: '  "id": ', cls: 'lm-term-out' },
+        { text: '"chatcmpl-A1F3x7"', cls: 'lm-term-string' },
+        { text: ',', cls: 'lm-term-out' },
+      ],
+    },
+    {
+      parts: [
+        { text: '  "object": ', cls: 'lm-term-out' },
+        { text: '"chat.completion"', cls: 'lm-term-string' },
+        { text: ',', cls: 'lm-term-out' },
+      ],
+    },
+    { parts: [{ text: '  "choices": [', cls: 'lm-term-out' }] },
+    { parts: [{ text: '    {', cls: 'lm-term-out' }] },
+    { parts: [{ text: '      "message": {', cls: 'lm-term-out' }] },
+    {
+      parts: [
+        { text: '        "role": ', cls: 'lm-term-out' },
+        { text: '"assistant"', cls: 'lm-term-string' },
+        { text: ',', cls: 'lm-term-out' },
+      ],
+    },
+    {
+      parts: [
+        { text: '        "content": ', cls: 'lm-term-out' },
+        {
+          text: '"你好！我是 AI 助手，很高兴为你服务。有什么我可以帮助你的吗？"',
+          cls: 'lm-term-string',
+        },
+      ],
+    },
+    { parts: [{ text: '      }', cls: 'lm-term-out' }] },
+    { parts: [{ text: '    }', cls: 'lm-term-out' }] },
+    { parts: [{ text: '  ],', cls: 'lm-term-out' }] },
+    { parts: [{ text: '  "usage": {', cls: 'lm-term-out' }] },
+    {
+      parts: [
+        { text: '    "prompt_tokens": ', cls: 'lm-term-out' },
+        { text: '8', cls: 'lm-term-kw' },
+        { text: ', "completion_tokens": ', cls: 'lm-term-out' },
+        { text: '23', cls: 'lm-term-kw' },
+        { text: ', "total_tokens": ', cls: 'lm-term-out' },
+        { text: '31', cls: 'lm-term-kw' },
+      ],
+    },
+    { parts: [{ text: '  }', cls: 'lm-term-out' }] },
+    { parts: [{ text: '}', cls: 'lm-term-out' }] },
+    {
+      html: '<span class="lm-term-line"><span class="lm-term-comment">// 计费: ¥0.0042 · 响应时间: 1.2s</span></span>',
+    },
+  ]
+}
 
-function HeroTerminal() {
+function HeroTerminal({ chatCompletionsUrl }: { chatCompletionsUrl: string }) {
   const ref = useRef<HTMLDivElement>(null)
+  const terminalDemoLines = useMemo(
+    () => getTerminalDemoLines(chatCompletionsUrl),
+    [chatCompletionsUrl]
+  )
   useStreamLines(ref, terminalDemoLines, { charDelay: 12, lineDelay: 180, loop: true })
   return (
     <LmTerminal
@@ -50,8 +125,9 @@ function HeroTerminal() {
 export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
   const { status } = useStatus()
   const starfieldRef = useRef<HTMLDivElement>(null)
-  const docsUrl =
-    (status?.docs_link as string | undefined) || '/'
+  const serverAddress = getConfiguredServerAddress(status)
+  const chatCompletionsUrl = buildChatCompletionsUrl(serverAddress)
+  const docsUrl = (status?.docs_link as string | undefined) || '/'
   useStarfield(starfieldRef)
 
   const renderDocsButton = () => {
@@ -139,7 +215,10 @@ export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
           <div>
             <div style={{ position: 'relative' }}>
               <div className="lm-scanline-overlay" aria-hidden="true" />
-              <HeroTerminal />
+              <HeroTerminal
+                key={chatCompletionsUrl}
+                chatCompletionsUrl={chatCompletionsUrl}
+              />
             </div>
             <div className="lm-row" style={{ marginTop: 14, gap: 10, fontSize: 11, color: 'var(--muted-foreground)' }}>
               <span className="lm-text-accent">┌─</span>
