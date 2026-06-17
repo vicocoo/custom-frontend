@@ -61,6 +61,7 @@ import {
   transformRedemptionToFormDefaults,
 } from '../lib'
 import { type Redemption } from '../types'
+import { CreatedRedemptionCodesDialog } from './created-redemption-codes-dialog'
 import { useRedemptions } from './redemptions-provider'
 
 type RedemptionsMutateDrawerProps = {
@@ -78,6 +79,9 @@ export function RedemptionsMutateDrawer({
   const isUpdate = !!currentRow
   const { triggerRefresh } = useRedemptions()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [createdCodes, setCreatedCodes] = useState<string[]>([])
+  const [createdCodesName, setCreatedCodesName] = useState('')
+  const [showCreatedCodes, setShowCreatedCodes] = useState(false)
 
   const form = useForm<RedemptionFormValues>({
     resolver: zodResolver(getRedemptionFormSchema(t)),
@@ -126,6 +130,9 @@ export function RedemptionsMutateDrawer({
                 })
               : t(SUCCESS_MESSAGES.REDEMPTION_CREATED)
           )
+          setCreatedCodes(result.data || [])
+          setCreatedCodesName(data.name)
+          setShowCreatedCodes(count > 0)
           onOpenChange(false)
           triggerRefresh()
         }
@@ -323,6 +330,18 @@ export function RedemptionsMutateDrawer({
           </Button>
         </SheetFooter>
       </SheetContent>
+      <CreatedRedemptionCodesDialog
+        open={showCreatedCodes}
+        onOpenChange={(isOpen) => {
+          setShowCreatedCodes(isOpen)
+          if (!isOpen) {
+            setCreatedCodes([])
+            setCreatedCodesName('')
+          }
+        }}
+        codes={createdCodes}
+        name={createdCodesName}
+      />
     </Sheet>
   )
 }

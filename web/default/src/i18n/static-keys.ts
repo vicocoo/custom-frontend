@@ -116,6 +116,9 @@ export const STATIC_I18N_KEYS = [
   'Redemption code enabled successfully',
   'Redemption code disabled successfully',
   'Copied to clipboard',
+  'Created Redemption Codes',
+  'Created redemption codes',
+  'Copy all created codes',
   'An unexpected error occurred',
   'Failed to load redemption codes',
   'Failed to search redemption codes',
@@ -129,6 +132,7 @@ export const STATIC_I18N_KEYS = [
   'Expired time cannot be earlier than current time',
   'Quota must be a positive number',
   'Successfully created {{count}} redemption codes',
+  'Save these {{count}} redemption codes now. They are shown only for this creation batch.',
 
   // Home page (constants-driven labels)
   'Cost Tracking',
