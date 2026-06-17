@@ -370,7 +370,7 @@ function PriceSection(props: {
     available: boolean
   }[] = [
     {
-      label: t('Cached input'),
+      label: t('Cache Read'),
       type: 'cache',
       available: props.model.cache_ratio != null,
     },
